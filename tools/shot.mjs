@@ -66,6 +66,8 @@ if (steps.includes('friends')) {
   await viewIs(1); await frames(3); await snap('11-friends-outside');
   await page.evaluate(() => { const { rig } = window.__dbg; rig.yaw = -0.75; rig.pitchOut = 0.02; });
   await frames(4); await snap('12-wall-photo');
+  await page.evaluate(() => { const { rig } = window.__dbg; rig.yaw = 0.95; rig.pitchOut = 0.04; });
+  await frames(4); await snap('13-window-wall');
 }
 if (steps.includes('chain')) {
   await page.evaluate(() => document.querySelector('button.go').click());

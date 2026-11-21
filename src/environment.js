@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { COMMON } from './shaders/common.js';
 import friendsUrl from '../assets/friends.jpg';
 import pubFrontUrl from '../assets/pub-front.jpg';
+import pubWindowsUrl from '../assets/pub-windows.jpg';
 
 // Where the friends' table sits in the pub: a photo panel behind the mug (world units).
 const FRIENDS = { x: 2, z: -80, w: 120, bottom: -20 };
@@ -480,6 +481,58 @@ export async function createEnvironment(renderer, scene, U, themeId) {
       pic.add(frame, img);
       pic.position.set(-98, 30, -62); pic.rotation.y = 0.75;
       scene.add(pic);
+    }
+    // The window wall on the right: lace curtains, hanging lamps and a lantern, from a photo of the pub.
+    {
+      const wt = new THREE.TextureLoader().load(pubWindowsUrl); wt.colorSpace = THREE.NoColorSpace; wt.anisotropy = 4;
+      const wall = new THREE.Group();
+      const W2 = 132, H2 = 88;
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(W2, H2), new THREE.ShaderMaterial({
+        uniforms: { tMap: { value: wt } }, transparent: true, depthWrite: false,
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: /* glsl */`
+          uniform sampler2D tMap; varying vec2 vUv;
+          void main() {
+            vec3 c = pow(texture2D(tMap, vUv).rgb, vec3(2.2)) * 1.25;
+            float a = smoothstep(0.0, 0.12, vUv.x) * smoothstep(1.0, 0.88, vUv.x) * smoothstep(1.0, 0.9, vUv.y) * smoothstep(0.0, 0.1, vUv.y);
+            gl_FragColor = vec4(c, a);
+          }`,
+      }));
+      panel.renderOrder = -6;
+      // A television above the windows, showing a match of its own.
+      const tc = document.createElement('canvas'); tc.width = 256; tc.height = 144;
+      const tx = tc.getContext('2d');
+      const tvTex = new THREE.CanvasTexture(tc); tvTex.colorSpace = THREE.SRGBColorSpace;
+      const drawTV = (t) => {
+        tx.fillStyle = '#16204a'; tx.fillRect(0, 0, 256, 40);
+        for (let i = 0; i < 90; i++) { tx.fillStyle = ['#3a4a8a', '#c9c2b0', '#8a2f2f', '#2a3566'][i % 4]; tx.fillRect((i * 37 + 11) % 256, 4 + (i * 13) % 30, 3, 3); }
+        tx.fillStyle = '#1b3fa8'; tx.fillRect(0, 40, 256, 14);
+        tx.fillStyle = '#e8ecff'; tx.font = 'bold 10px sans-serif'; tx.fillText('PROST!   BUBORÉK   PROST!   HAB', 256 - ((t * 14) % 420), 51);
+        for (let i = 0; i < 6; i++) { tx.fillStyle = i % 2 ? '#2f8f3c' : '#37a046'; tx.fillRect(i * 43, 54, 43, 90); }
+        tx.strokeStyle = 'rgba(255,255,255,.7)'; tx.lineWidth = 1.5; tx.beginPath(); tx.moveTo(128, 54); tx.lineTo(128, 144); tx.stroke();
+        tx.beginPath(); tx.ellipse(128, 100, 26, 14, 0, 0, 7); tx.stroke();
+        let bx = 128, by = 100;
+        for (let i = 0; i < 10; i++) {
+          const x = 128 + 105 * Math.sin(t * (0.21 + i * 0.017) + i * 1.9), y = 100 + 34 * Math.sin(t * (0.27 + i * 0.013) + i * 2.6);
+          tx.fillStyle = i % 2 ? '#d7262b' : '#1f55d0'; tx.fillRect(x - 2.5, y - 9, 5, 9);
+          tx.fillStyle = '#e9c7a8'; tx.beginPath(); tx.arc(x, y - 11, 2.4, 0, 7); tx.fill();
+          if (i === Math.floor(t / 2.5) % 10) { bx = x + 5; by = y; }
+        }
+        tx.fillStyle = '#fff'; tx.beginPath(); tx.arc(bx, by, 2.2, 0, 7); tx.fill();
+        tx.fillStyle = 'rgba(8,12,30,.85)'; tx.fillRect(176, 6, 74, 16);
+        tx.fillStyle = '#fff'; tx.font = 'bold 11px sans-serif'; tx.fillText('BUB 0 : 0 HAB', 181, 18);
+        tvTex.needsUpdate = true;
+      };
+      drawTV(0);
+      const tv = new THREE.Group(); tv.position.set(36, 27, 1.2);
+      tv.add(new THREE.Mesh(new THREE.BoxGeometry(44, 26, 1.4), new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 0.4 })));
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(41, 23), new THREE.MeshBasicMaterial({ map: tvTex, color: new THREE.Color(1.7, 1.7, 1.8) }));
+      screen.position.z = 0.75; tv.add(screen);
+      wall.add(panel, tv);
+      wall.position.set(96, -22 + H2 / 2, -52); wall.rotation.y = -Math.PI / 2 + 0.55;
+      scene.add(wall);
+      let acc = 0;
+      spin.push((dt, t) => { acc += dt; if (acc > 0.12) { acc = 0; drawTV(t); } });
     }
     // ceiling fan
     const fan = new THREE.Group(); fan.position.set(10, 50, -60);
