@@ -4,6 +4,19 @@ import { YB, RIM, L0, LMIN, R_START, R_MIN, innerR, quality, clamp, lerp, smooth
 
 const V = () => new THREE.Vector3();
 
+// Difficulty knobs, tuned with tools/sim.mjs. m = mug number - 1.
+export const TUNE = {
+  gate: (m) => Math.min(0.27, 0.19 + 0.02 * m),       // size needed to break the foam
+  grow: 0.9,                                          // share of an eaten bubble's volume you keep
+  dissolve: 0.004,                                    // fraction of your radius lost per second
+  pull: (r) => r * 2.2 + 0.06,                        // how far small bubbles drift toward you
+  fizzGain: (combo) => 0.045 + 0.006 * combo, fizzDecay: 0.1, fizzTime: 4, fizzEat: 1.3,
+  firstSip: 8, sipEvery: (m) => Math.max(7, 15 - 2 * m), sips: (m) => Math.max(3, 6 - m), sipReach: 4.3,
+  hops: (m) => Math.min(44, 12 + 9 * m), hopDrift: 0.5, hopHunt: (m) => 0.3 + 0.08 * m,
+  hopBite: 0.72, bubbleBite: 0.76, mercy: 1.1,        // size kept after a hit, and seconds of safety after it
+  clouds: (m) => Math.min(12, 4 + 2 * m),
+};
+
 export class Game {
   constructor(shape, foam0) {
     this.shape = shape; this.foam0 = foam0;
@@ -36,13 +49,14 @@ export class Game {
     this.mug = n;
     const m = n - 1;
     this.sigma = Math.min(0.62, 0.27 + 0.055 * m);
-    this.gate = Math.min(0.23, 0.165 + 0.013 * m);
-    this.nSips = Math.max(4, 7 - m);
-    this.sipEvery = Math.max(9, 19 - 2.5 * m);
+    this.gate = TUNE.gate(m);
+    this.nSips = TUNE.sips(m);
+    this.sipEvery = TUNE.sipEvery(m);
+    this.hunt = TUNE.hopHunt(m);
     this.flowGain = 1 + 0.15 * m;
     this.level = L0; this.foamH = this.foam0; this.laceTop = L0 + this.foam0;
     this.tilt = 0; this.lift = 0; this.shade = 0; this.drink = 0; this.haze = 0;
-    this.sip = { phase: 'wait', t: this.sipEvery + (n === 1 ? 24 : 6), done: 0, from: L0, to: L0, final: false, a0: 0 };
+    this.sip = { phase: 'wait', t: this.sipEvery + (n === 1 ? TUNE.firstSip : 4), done: 0, from: L0, to: L0, final: false, a0: 0 };
     this.warning = 0;
     this.combo = 0; this.comboT = 0;
     this.fizz = 0; this.fizzT = 0;       // meter 0..1, and seconds of fizz mode left
@@ -51,12 +65,12 @@ export class Game {
     this.setSurface();
 
     const P = this.player;
-    P.pos.set(0.6, YB + 0.5, 0.9); P.vel.set(0, 0, 0); P.r = R_START; P.scale = 1; P.wob = 0; P.invuln = 3; P.hurtT = 0; P.visible = true; P.pop = 0; P.dashCd = 0;
+    P.pos.set(0.6, YB + 0.5, 0.9); P.vel.set(0, 0, 0); P.r = R_START; P.scale = 1; P.wob = 0; P.invuln = 2.5; P.hurtT = 0; P.visible = true; P.pop = 0; P.dashCd = 0;
 
     for (let i = 0; i < this.NB; i++) this.spawnBubble(i, true);
-    this.nHops = Math.min(this.MAXH, 10 + 6 * m);
+    this.nHops = Math.min(this.MAXH, TUNE.hops(m));
     for (let i = 0; i < this.nHops; i++) this.spawnHop(this.hops[i], false);
-    this.nClouds = Math.min(this.MAXC, 3 + 2 * m);
+    this.nClouds = Math.min(this.MAXC, TUNE.clouds(m));
     for (let i = 0; i < this.nClouds; i++) {
       const c = this.clouds[i];
       this.randomPoint(c.pos, 1.2); c.pos.y = Math.max(c.pos.y, YB + 3);
@@ -88,7 +102,7 @@ export class Game {
 
   spawnBubble(i, anywhere) {
     const u = Math.random();
-    const t = u < 0.64 ? 0.02 + Math.random() * 0.022 : u < 0.9 ? 0.036 + Math.random() * 0.044 : u < 0.985 ? 0.08 + Math.random() * 0.07 : 0.16 + Math.random() * 0.12;
+    const t = u < 0.58 ? 0.02 + Math.random() * 0.022 : u < 0.86 ? 0.036 + Math.random() * 0.044 : u < 0.975 ? 0.08 + Math.random() * 0.07 : 0.16 + Math.random() * 0.12;
     this.bTarget[i] = t; this.bPhase[i] = Math.random() * 6.283;
     const k = i * 3;
     if (anywhere || (t > 0.036 && Math.random() < 0.5)) {
@@ -121,7 +135,7 @@ export class Game {
     // The sip drags everything near the surface toward the mouth.
     if (this.drink > 0) {
       const dx = this.mouth.x - x, dy = this.mouth.y - y, dz = this.mouth.z - z;
-      const d = Math.hypot(dx, dy, dz) + 1e-4, reach = this.sip.final ? 30 : 3.6;
+      const d = Math.hypot(dx, dy, dz) + 1e-4, reach = this.sip.final ? 30 : TUNE.sipReach;
       if (d < reach) { const s = (this.sip.final ? 5 : 4.4 * (1 - d / reach)) * this.drink / d; out.x += dx * s; out.y += dy * s; out.z += dz * s; }
       const h = this.surfC - (this.up.y * y + this.up.z * z);
       if (h < 2.5) out.z -= 1.0 * this.drink * (1 - h / 2.5);
@@ -163,7 +177,7 @@ export class Game {
     if (P.pop > 0) { P.pop += dt * 1.6; if (P.pop >= 1) P.pop = 0; }
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) this.combo = 0; }
     if (this.fizzT > 0) { this.fizzT -= dt; if (this.fizzT <= 0) { this.fizzT = 0; this.fizz = 0; this.emit('fizzEnd', {}); } }
-    else this.fizz = Math.max(0, this.fizz - dt * 0.05);
+    else this.fizz = Math.max(0, this.fizz - dt * TUNE.fizzDecay);
     this.toastCd -= dt;
   }
 
@@ -227,13 +241,15 @@ export class Game {
     P.r *= factor; this.combo = 0; this.comboT = 0; this.fizz *= 0.5;
     this.emit('hit', { cause });
     if (P.r < R_MIN) { this.die(cause); return false; }
-    P.invuln = 1.5; P.hurtT = 1.5; P.wob = 1; P.pop = 0.001;
+    P.invuln = TUNE.mercy; P.hurtT = TUNE.mercy; P.wob = 1; P.pop = 0.001;
     return true;
   }
 
   updatePlayer(dt, input) {
     const P = this.player, f = V(), fizzing = this.fizzT > 0;
     this.flow(P.pos.x, P.pos.y, P.pos.z, f);
+    // The bubble slowly dissolves into the beer, so standing still is not an option.
+    if (!fizzing) { P.r -= P.r * TUNE.dissolve * dt; if (P.r < R_MIN) { this.die('pop'); return; } }
 
     // yeast clouds slow, sink and blind
     let inCloud = 0;
@@ -286,7 +302,7 @@ export class Game {
       } else if (P.invuln <= 0) {
         const n = V().subVectors(P.pos, h.pos).normalize();
         h.wander.copy(n).negate();
-        if (!this.hurt(0.76, 'pop', n.x, n.y, n.z)) return;
+        if (!this.hurt(TUNE.hopBite, 'pop', n.x, n.y, n.z)) return;
         this.toast('Komlószilánk! Kisebb lettél.');
       }
     }
@@ -316,8 +332,8 @@ export class Game {
   ambient(dt, live) {
     const P = this.player, f = V(), up = this.up, bp = this.bPos, br = this.bRad, t = this.time;
     const span = L0 - YB, pr = P.r, fizzing = this.fizzT > 0;
-    const eatMax = pr * (fizzing ? 1.6 : 0.93), dangerMin = pr * 1.08;
-    const pull = live ? pr * (fizzing ? 7 : 3.2) + 0.12 : 0;     // small bubbles drift toward you
+    const eatMax = pr * (fizzing ? TUNE.fizzEat : 0.93), dangerMin = pr * 1.08;
+    const pull = live ? TUNE.pull(pr) * (fizzing ? 2.2 : 1) : 0;     // small bubbles drift toward you
     let ate = 0;
     for (let i = 0; i < this.NB; i++) {
       const k = i * 3;
@@ -346,20 +362,20 @@ export class Game {
         if (d2 < rr * rr) {
           const d = Math.sqrt(d2) || 1e-3;
           if (r < eatMax) {
-            P.r = Math.cbrt(P.r ** 3 + 1.5 * r ** 3);
+            P.r = Math.cbrt(P.r ** 3 + TUNE.grow * r ** 3);
             this.combo = Math.min(9, this.combo + 1); this.comboT = 2.0; this.eaten++; ate++;
             const pts = Math.round((10 + 90 * Math.min(1, r / pr)) * this.combo * (fizzing ? 2 : 1));
             this.score += pts; P.wob = Math.max(P.wob, 0.45 + Math.min(1, r / pr) * 0.5);
             P.vel.addScaledVector(up, 0.35);                       // every bubble gives a little lift
             if (!fizzing) {
-              this.fizz = Math.min(1, this.fizz + 0.07 + 0.012 * this.combo);
-              if (this.fizz >= 1) { this.fizzT = 5; this.emit('fizz', {}); }
+              this.fizz = Math.min(1, this.fizz + TUNE.fizzGain(this.combo));
+              if (this.fizz >= 1) { this.fizzT = TUNE.fizzTime; this.emit('fizz', {}); }
             }
             this.emit('absorb', { pts, ratio: Math.min(1, r / pr) });
             this.spawnBubble(i, false); continue;
           } else if (r > dangerMin && P.invuln <= 0) {
             // a bigger bubble takes a bite out of you
-            if (!this.hurt(this.mug === 1 ? 0.82 : 0.76, 'absorbed', -dx / d, -dy / d, -dz / d)) { bp[k] = x; bp[k + 1] = y; bp[k + 2] = z; return; }
+            if (!this.hurt(TUNE.bubbleBite, 'absorbed', -dx / d, -dy / d, -dz / d)) { bp[k] = x; bp[k + 1] = y; bp[k + 2] = z; return; }
             this.toast('A pirosan csillogó, nagyobb buborékok megcsípnek. Kerüld őket, amíg kicsi vagy!');
           } else {
             const o = (rr - d) / d;
@@ -378,7 +394,12 @@ export class Game {
       const h = this.hops[i];
       this.flow(h.pos.x, h.pos.y, h.pos.z, f);
       if (Math.random() < dt * 0.4) h.wander.set(Math.random() - 0.5, (Math.random() - 0.5) * 0.7, Math.random() - 0.5).normalize();
-      h.pos.addScaledVector(f, 0.9 * dt).addScaledVector(h.wander, 0.3 * this.flowGain * dt);
+      h.pos.addScaledVector(f, 0.9 * dt).addScaledVector(h.wander, TUNE.hopDrift * this.flowGain * dt);
+      // every third shard drifts after the player when close
+      if (live && i % 3 === 0 && !fizzing) {
+        const hx = P.pos.x - h.pos.x, hy = P.pos.y - h.pos.y, hz = P.pos.z - h.pos.z, hd = Math.hypot(hx, hy, hz);
+        if (hd < 3 && hd > 1e-3) { const s = this.hunt * dt / hd; h.pos.x += hx * s; h.pos.y += hy * s; h.pos.z += hz * s; }
+      }
       h.ang += h.spin * dt;
       this.confine(h.pos, h.s, null);
       if (this.drink > 0.5 && h.pos.distanceTo(this.mouth) < 0.9) this.spawnHop(h, true);

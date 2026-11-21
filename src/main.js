@@ -4,7 +4,7 @@ import { quality, YB, L0, clamp, lerp, THEMES, SHAPES, currentThemeId } from './
 import { createEnvironment } from './environment.js';
 import { createMug } from './mug.js';
 import { createBubbles } from './bubbles.js';
-import { Game } from './game.js';
+import { Game, TUNE } from './game.js';
 import { Pipeline } from './post.js';
 import { Rig } from './camera.js';
 import { Input } from './input.js';
@@ -143,7 +143,7 @@ async function boot() {
     mug.mu.uSigma.value = game.sigma; mug.mu.uShade.value = game.shade;
     mug.mu.uFogGain.value = lerp(1.0, 1.75, rig.e);
     const fizzing = game.fizzT > 0;
-    mug.mu.uEdible.value = playing ? game.player.r * (fizzing ? 1.6 : 0.93) : 0;
+    mug.mu.uEdible.value = playing ? game.player.r * (fizzing ? TUNE.fizzEat : 0.93) : 0;
     mug.mu.uDanger.value = playing && !fizzing ? game.player.r * 1.08 : 1e9;
     // speed you can feel: wider view and streaks when rising fast or fizzing
     const sp = clamp((game.player.vel.length() - 1.0) / 3.5, 0, 1);

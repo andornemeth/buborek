@@ -59,7 +59,7 @@ export class Hud {
         <li><b>Egérhúzás</b><span>körbenézés</span></li>
         <li><b>Szóköz · Tab</b><span>lendület · a korsó kívülről</span></li>`}
       </ul>
-      <p class="dim"><b>A buborék magától száll felfelé.</b> 1. Száguldj végig a <b style="color:#8dff9e">zöld</b> buboréksorokon: megnősz, és ha megtelik a Pezsgés, pár másodpercre megállíthatatlan vagy. 2. Kerüld a <b style="color:#ff8a70">piros</b> buborékokat és a komlószilánkot. 3. Ha megtelt a Méret, törd át a habot!</p>
+      <p class="dim"><b>A buborék magától száll felfelé.</b> 1. Száguldj végig a <b style="color:#8dff9e">zöld</b> buboréksorokon: megnősz, és ha megtelik a Pezsgés, pár másodpercre megállíthatatlan vagy. 2. Kerüld a <b style="color:#ff8a70">piros</b> buborékokat és a komlószilánkot. 3. Ha megtelt a Méret, törd át a habot! Ne állj meg: a buborék lassan oldódik a sörben, és a Nagy Ivó sem vár.</p>
       ${best ? `<p class="dim">Rekordod: <b>${fmt(best)}</b></p>` : ''}
       <button class="go">Felszállás</button>`, onGo);
     for (const b of this.el.inner.querySelectorAll('[data-venue]')) b.addEventListener('click', () => { if (b.dataset.venue !== themeId) onVenue(b.dataset.venue); });
@@ -108,7 +108,7 @@ export class Hud {
 
     // one line that always says what to do next
     const pct = Math.round(100 * Math.max(0, Math.min(1, (P.r - R_START) / (game.gate - R_START))));
-    e.fizz.style.transform = `scaleX(${(game.fizzT > 0 ? game.fizzT / 5 : game.fizz).toFixed(3)})`;
+    e.fizz.style.transform = `scaleX(${(game.fizzT > 0 ? Math.min(1, game.fizzT / 4) : game.fizz).toFixed(3)})`;
     set('fizzing', game.fizzT > 0, (v) => { e.fizzBox.classList.toggle('on', v); e.fizzBox.firstElementChild.textContent = v ? 'PEZSGÉS! Megállíthatatlan vagy' : 'Pezsgés'; });
     const sipNow = game.warning > 0 && game.state === 'play';
     const goalKey = sipNow ? 'sip' : game.state !== 'play' ? 'none' : P.r >= game.gate ? 'ready' : !game.moved ? 'move' : game.eaten < 5 ? 'eat' : 'grow' + pct;
