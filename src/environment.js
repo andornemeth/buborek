@@ -14,8 +14,8 @@ function rng(seed) {
 
 const BAND = [-12, 33];
 
-// Equirectangular painting of the market at blue hour: u = azimuth, top = zenith. Direction -Z is at u = 0.25.
-function paintPanorama() {
+// Equirectangular painting of the surroundings: u = azimuth, top = zenith. Direction -Z is at u = 0.25.
+function paintPanorama(kind) {
   const W = 2048, H = 1024, rnd = rng(7);
   const yOf = (elevDeg) => H / 2 - (elevDeg / 90) * (H / 2);
 
@@ -23,13 +23,6 @@ function paintPanorama() {
   const sw = 1024, sh = 512, k = sw / W;
   const small = document.createElement('canvas'); small.width = sw; small.height = sh;
   const s = small.getContext('2d');
-  const sky = s.createLinearGradient(0, 0, 0, sh / 2);
-  sky.addColorStop(0, '#06123f'); sky.addColorStop(0.55, '#0e2f8c'); sky.addColorStop(0.88, '#2553b8'); sky.addColorStop(1, '#4a72c4');
-  s.fillStyle = sky; s.fillRect(0, 0, sw, sh / 2);
-  const ground = s.createLinearGradient(0, sh / 2, 0, sh);
-  ground.addColorStop(0, '#1b1a22'); ground.addColorStop(0.2, '#0f0e14'); ground.addColorStop(1, '#050508');
-  s.fillStyle = ground; s.fillRect(0, sh / 2, sw, sh / 2);
-
   const rect = (u0, u1, e0, e1, col) => {
     s.fillStyle = col;
     for (const o of [-1, 0, 1]) s.fillRect((u0 + o) * sw, yOf(e1) * k, (u1 - u0) * sw, (yOf(e0) - yOf(e1)) * k);
@@ -42,6 +35,54 @@ function paintPanorama() {
     s.fillStyle = col;
     for (const o of [-1, 0, 1]) { s.beginPath(); s.ellipse((uc + o) * sw, yOf(e) * k, ru * sw, re * (H / 180) * k, 0, 0, 7); s.fill(); }
   };
+
+  // Lights live on their own layer so they can be made far brighter than the scenery.
+  const lc = document.createElement('canvas'); lc.width = W; lc.height = H;
+  const l = lc.getContext('2d');
+  l.fillStyle = '#000'; l.fillRect(0, 0, W, H);
+  l.globalCompositeOperation = 'lighter';
+  // The same lights again at twice the resolution, for the strip of sky the camera looks at directly
+  // (elevation BAND[0]..BAND[1] degrees), so the bokeh discs stay round when magnified.
+  const bc = document.createElement('canvas'); bc.width = W * 2; bc.height = 512;
+  const bl = bc.getContext('2d');
+  bl.fillStyle = '#000'; bl.fillRect(0, 0, bc.width, bc.height);
+  bl.globalCompositeOperation = 'lighter';
+  const put = (ctx, x, y, r, rgb, a, soft) => {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    if (soft) { g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`); }
+    else {
+      g.addColorStop(0, `rgba(${rgb},${a * 0.7})`); g.addColorStop(0.8, `rgba(${rgb},${a})`);
+      g.addColorStop(0.93, `rgba(${rgb},${a * 0.9})`); g.addColorStop(1, `rgba(${rgb},0)`);
+    }
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+  };
+  const disc = (uc, e, r, rgb, a, soft) => {
+    for (const o of [-1, 0, 1]) {
+      const x = (uc + o) * W, y = yOf(e);
+      if (x < -r || x > W + r) continue;
+      put(l, x, y, r, rgb, a, soft);
+      put(bl, x * 2, (BAND[1] - e) / (BAND[1] - BAND[0]) * 512, r * 2, rgb, a, soft);
+    }
+  };
+  const T = { s, sw, sh, k, W, H, yOf, rnd, rect, poly, blob, disc };
+  (kind === 'kocsma' ? pubScene : marketScene)(T);
+
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const c = cv.getContext('2d');
+  c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+  c.drawImage(small, 0, 0, W, H);
+
+  return { scenery: cv, lights: lc, band: bc };
+}
+
+// The Christmas market at blue hour.
+function marketScene({ s, sw, sh, k, H, yOf, rnd, rect, poly, blob, disc }) {
+  const sky = s.createLinearGradient(0, 0, 0, sh / 2);
+  sky.addColorStop(0, '#06123f'); sky.addColorStop(0.55, '#0e2f8c'); sky.addColorStop(0.88, '#2553b8'); sky.addColorStop(1, '#4a72c4');
+  s.fillStyle = sky; s.fillRect(0, 0, sw, sh / 2);
+  const ground = s.createLinearGradient(0, sh / 2, 0, sh);
+  ground.addColorStop(0, '#1b1a22'); ground.addColorStop(0.2, '#0f0e14'); ground.addColorStop(1, '#050508');
+  s.fillStyle = ground; s.fillRect(0, sh / 2, sw, sh / 2);
 
   // Dim town houses all around.
   let u = 0.47;
@@ -97,39 +138,6 @@ function paintPanorama() {
   }
   for (let i = 0; i < 9; i++) { const a = rnd(); rect(a, a + 0.08, -5.2, -3.8, '#1c110b'); }
 
-  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-  const c = cv.getContext('2d');
-  c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
-  c.drawImage(small, 0, 0, W, H);
-
-  // Lights live on their own layer so they can be made far brighter than the scenery.
-  const lc = document.createElement('canvas'); lc.width = W; lc.height = H;
-  const l = lc.getContext('2d');
-  l.fillStyle = '#000'; l.fillRect(0, 0, W, H);
-  l.globalCompositeOperation = 'lighter';
-  // The same lights again at twice the resolution, for the strip of sky the camera looks at directly
-  // (elevation BAND[0]..BAND[1] degrees), so the bokeh discs stay round when magnified.
-  const bc = document.createElement('canvas'); bc.width = W * 2; bc.height = 512;
-  const bl = bc.getContext('2d');
-  bl.fillStyle = '#000'; bl.fillRect(0, 0, bc.width, bc.height);
-  bl.globalCompositeOperation = 'lighter';
-  const put = (ctx, x, y, r, rgb, a, soft) => {
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    if (soft) { g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`); }
-    else {
-      g.addColorStop(0, `rgba(${rgb},${a * 0.7})`); g.addColorStop(0.8, `rgba(${rgb},${a})`);
-      g.addColorStop(0.93, `rgba(${rgb},${a * 0.9})`); g.addColorStop(1, `rgba(${rgb},0)`);
-    }
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
-  };
-  const disc = (uc, e, r, rgb, a, soft) => {
-    for (const o of [-1, 0, 1]) {
-      const x = (uc + o) * W, y = yOf(e);
-      if (x < -r || x > W + r) continue;
-      put(l, x, y, r, rgb, a, soft);
-      put(bl, x * 2, (BAND[1] - e) / (BAND[1] - BAND[0]) * 512, r * 2, rgb, a, soft);
-    }
-  };
   const warm = '255,160,60', gold = '255,196,110', red = '255,40,24', cool = '190,215,255', blue = '70,120,255';
   // Bulb strings along the stall roofs.
   for (const [a, b] of [[0.1, 0.19], [0.27, 0.4], [0.5, 0.6], [0.66, 0.78], [0.84, 0.95]]) {
@@ -149,7 +157,59 @@ function paintPanorama() {
   // A few higher lights on the camera's side so the glass always has something to reflect.
   for (let i = 0; i < 110; i++) disc(0.46 + rnd() * 0.58, rnd() < 0.7 ? rnd() * 14 : 14 + rnd() * 16, 5 + rnd() * 9, rnd() < 0.8 ? warm : cool, 0.15 + rnd() * 0.5);
   for (let i = 0; i < 40; i++) disc(rnd() * 0.46, rnd() * 9, 4 + rnd() * 6, warm, 0.15 + rnd() * 0.4);
-  return { scenery: cv, lights: lc, band: bc };
+}
+
+// The pub: timber-framed plaster walls, a leather bench with a lantern on the ledge, the bar, windows at dusk.
+function pubScene({ s, sw, sh, k, yOf, rnd, rect, poly, blob, disc }) {
+  const ceil = s.createLinearGradient(0, 0, 0, sh / 2);
+  ceil.addColorStop(0, '#5f5a50'); ceil.addColorStop(0.55, '#8d8778'); ceil.addColorStop(1, '#a8a190');
+  s.fillStyle = ceil; s.fillRect(0, 0, sw, sh / 2);
+  const floor = s.createLinearGradient(0, sh / 2, 0, sh);
+  floor.addColorStop(0, '#1d140d'); floor.addColorStop(0.3, '#120c08'); floor.addColorStop(1, '#070504');
+  s.fillStyle = floor; s.fillRect(0, sh / 2, sw, sh / 2);
+  for (const e of [41, 50, 61, 74]) rect(0, 1, e, e + 2.2, '#1c130c');          // ceiling beams
+  // plaster wall, warmer and brighter near the lantern
+  for (let x = 0; x < 1; x += 0.0625) {
+    const near = Math.max(0, 1 - Math.abs(x + 0.03 - 0.27) / 0.2), v = 96 + Math.floor(near * 96 + rnd() * 14);
+    rect(x, x + 0.0625, 6.2, 39, `rgb(${v + 14},${v + 4},${v - 16})`);
+    for (let i = 0; i < 9; i++) { const a = x + 0.006 + rnd() * 0.045, e = 8 + rnd() * 28; rect(a, a + 0.008 + rnd() * 0.012, e, e + 0.5, `rgba(255,250,235,${0.12 + rnd() * 0.16})`); }
+    rect(x - 0.004, x + 0.004, 6.2, 39, '#22150c');                             // post
+    if (rnd() < 0.45) poly([[x + 0.006, 6.2], [x + 0.014, 6.2], [x + 0.058, 22], [x + 0.05, 22]], '#22150c');   // brace
+    else if (rnd() < 0.4) poly([[x + 0.058, 6.2], [x + 0.05, 6.2], [x + 0.006, 22], [x + 0.014, 22]], '#22150c');
+  }
+  rect(0, 1, 22, 23.8, '#22150c'); rect(0, 1, 37, 39.6, '#1c120a');
+  // leather bench and its wooden ledge
+  rect(0, 1, 0, 5, '#211d1a'); rect(0, 1, 3.6, 4.2, '#3a342f'); rect(0, 1, 5, 6.4, '#5b3a1e'); rect(0, 1, 6.2, 6.5, '#8a5d30');
+  // windows at dusk with half curtains
+  for (const a of [0.86, 0.905, 0.95]) {
+    rect(a, a + 0.036, 9, 21, '#3c5c96'); rect(a, a + 0.036, 9, 14.5, '#c5ccd6');
+    rect(a + 0.017, a + 0.019, 9, 21, '#1c120a'); rect(a, a + 0.036, 15, 15.4, '#1c120a'); rect(a - 0.003, a + 0.039, 21, 22, '#1c120a');
+  }
+  // the bar: dark panelling, a lit back shelf with bottles, the tap tower
+  rect(0.555, 0.805, 0, 31, '#24160d');
+  for (let x = 0.56; x < 0.8; x += 0.016) rect(x, x + 0.002, 0, 31, '#150c07');
+  rect(0.6, 0.785, 6, 21, '#5c3412'); rect(0.6, 0.785, 13, 13.8, '#2a1709');
+  const glassCols = ['#c98a2c', '#7a3d1a', '#d9c27a', '#3f6a3a', '#b8b8c0', '#a8542a'];
+  for (let x = 0.606; x < 0.78; x += 0.0085) { const c2 = glassCols[Math.floor(rnd() * glassCols.length)]; rect(x, x + 0.0045, 14, 16.5 + rnd() * 2.5, c2); rect(x, x + 0.0045, 7, 9 + rnd() * 2, c2); }
+  rect(0.682, 0.704, 1.5, 9.5, '#d48a2a'); rect(0.676, 0.71, 9.5, 10.6, '#8a5a22');
+  rect(0.555, 0.805, 0, 1.6, '#3a2413');
+  for (const [a, col] of [[0.625, '#2f6fc0'], [0.745, '#8d9099'], [0.66, '#1a1a1c']]) { blob(a, 3.4, 0.011, 3.6, col); blob(a, 8.2, 0.0048, 1.3, '#b98d72'); }
+  rect(0.4, 0.452, 11.5, 18.5, '#0c0c10'); rect(0.403, 0.449, 12, 18, '#6f9fe6');           // screen
+  for (const a of [0.07, 0.48, 0.9]) rect(a, a + 0.1, -6.5, -4.6, '#6b4520');               // other tables
+
+  const warm = '255,150,50', gold = '255,196,110', cool = '215,228,255';
+  // lantern with a candle on the ledge behind the mug
+  disc(0.272, 9.0, 34, warm, 0.42, true); disc(0.272, 8.6, 6.5, '255,176,84', 1); disc(0.272, 10.2, 4, gold, 0.5);
+  // lamps over the bar and its glowing shelf
+  for (let x = 0.612; x < 0.78; x += 0.0125) disc(x, 19.6 + rnd() * 0.5, 5 + rnd() * 2.5, gold, 0.5 + rnd() * 0.35);
+  disc(0.693, 6, 36, '255,130,36', 0.4, true);
+  for (const a of [0.47, 0.5, 0.53]) { disc(a, 25, 9, gold, 0.95); disc(a, 23.5, 22, warm, 0.3, true); }
+  for (const a of [0.59, 0.82, 0.12, 0.36]) { disc(a, 16, 7.5, warm, 0.9); disc(a, 16, 20, warm, 0.25, true); }   // wall lanterns
+  for (let i = 0; i < 9; i++) disc(rnd(), -3 + rnd() * 2.5, 4.5 + rnd() * 3, warm, 0.5 + rnd() * 0.4);            // candles on other tables
+  disc(0.426, 15, 30, '80,130,255', 0.3, true); disc(0.92, 15, 44, '70,110,220', 0.22, true);
+  // ceiling spots, so the glass always has something to reflect
+  for (let i = 0; i < 14; i++) disc(rnd(), 46 + rnd() * 30, 6 + rnd() * 4, rnd() < 0.5 ? cool : gold, 0.55 + rnd() * 0.35);
+  for (let i = 0; i < 26; i++) disc(0.5 + rnd() * 0.5, 24 + rnd() * 9, 4 + rnd() * 4, gold, 0.2 + rnd() * 0.35);
 }
 
 // A Christmas pyramid on a market stall: shingle roof edged with bulbs, a starred spire and a turning fan.
@@ -200,7 +260,7 @@ function buildPyramidStall() {
   return { group: g, fan };
 }
 
-function paintWood() {
+function paintWood(pal) {
   const S = 1024, rnd = rng(21);
   const col = document.createElement('canvas'); col.width = col.height = S;
   const rough = document.createElement('canvas'); rough.width = rough.height = S;
@@ -211,8 +271,8 @@ function paintWood() {
   const planks = 4, ph = S / planks;
   for (let p = 0; p < planks; p++) {
     const y0 = p * ph;
-    const tone = 0.8 + rnd() * 0.4;
-    c.fillStyle = `rgb(${Math.round(58 * tone)},${Math.round(28 * tone)},${Math.round(17 * tone)})`;
+    const tone = 1 - pal.vary / 2 + rnd() * pal.vary;
+    c.fillStyle = `rgb(${Math.round(pal.base[0] * tone)},${Math.round(pal.base[1] * tone)},${Math.round(pal.base[2] * tone)})`;
     c.fillRect(0, y0, S, ph);
     for (let i = 0; i < 150; i++) {
       const y = y0 + rnd() * ph, amp = 2 + rnd() * 5, f = 1 + Math.floor(rnd() * 3), phs = rnd() * 7;
@@ -226,7 +286,7 @@ function paintWood() {
         ctx.stroke();
       };
       c.lineWidth = 1.5 + rnd() * 4;
-      c.strokeStyle = dark ? `rgba(22,9,5,${0.1 + rnd() * 0.3})` : `rgba(120,66,38,${0.05 + rnd() * 0.12})`;
+      c.strokeStyle = dark ? `rgba(${pal.dark},${0.1 + rnd() * 0.3})` : `rgba(${pal.light},${0.05 + rnd() * 0.12})`;
       path(c);
       b.lineWidth = c.lineWidth; b.strokeStyle = dark ? 'rgba(40,40,40,0.35)' : 'rgba(190,190,190,0.2)'; path(b);
       r.lineWidth = c.lineWidth * 2; r.strokeStyle = dark ? 'rgba(170,170,170,0.2)' : 'rgba(40,40,40,0.14)'; path(r);
@@ -258,9 +318,10 @@ function paintCoaster() {
   return cv;
 }
 
-export function createEnvironment(renderer, scene, U) {
+export function createEnvironment(renderer, scene, U, themeId) {
+  const pub = themeId === 'kocsma';
   // HDR panorama: the painted lights are pushed well above 1.0 so they bloom and reflect brightly.
-  const painted = paintPanorama();
+  const painted = paintPanorama(themeId);
   const pano = new THREE.CanvasTexture(painted.scenery), lights = new THREE.CanvasTexture(painted.lights);
   pano.colorSpace = lights.colorSpace = THREE.NoColorSpace;
   const envRT = new THREE.WebGLRenderTarget(2048, 1024, {
@@ -321,27 +382,87 @@ export function createEnvironment(renderer, scene, U) {
   scene.add(dome);
 
   // Tables.
-  const wood = paintWood();
+  const wood = paintWood(pub
+    ? { base: [176, 118, 58], dark: '70,36,12', light: '236,188,120', vary: 0.16 }
+    : { base: [58, 28, 17], dark: '22,9,5', light: '120,66,38', vary: 0.4 });
   const mk = (cv, srgb) => {
     const t = new THREE.CanvasTexture(cv);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2.4, 1);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(pub ? 1.2 : 2.4, 1);
     t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
     if (srgb) t.colorSpace = THREE.SRGBColorSpace;
     return t;
   };
   const woodMat = new THREE.MeshStandardMaterial({
     map: mk(wood.col, true), roughnessMap: mk(wood.rough), bumpMap: mk(wood.bump), bumpScale: 0.12,
-    roughness: 0.75, metalness: 0.0, envMapIntensity: 0.6,
+    roughness: pub ? 0.62 : 0.75, metalness: 0.0, envMapIntensity: pub ? 0.75 : 0.6,
   });
   const tables = new THREE.Group();
-  const top = new THREE.Mesh(new THREE.BoxGeometry(96, 1.4, 36), woodMat);
-  top.position.set(0, -0.7, -4);
-  const back = new THREE.Mesh(new THREE.BoxGeometry(96, 1.4, 36), woodMat);
-  back.position.set(10, -0.7, -62);
-  const bench = new THREE.Mesh(new THREE.BoxGeometry(96, 1.2, 11), woodMat);
-  bench.position.set(4, -9.5, -33);
-  tables.add(top, back, bench);
-  tables.rotation.y = -0.16;
+  const spin = [];
+  if (pub) {
+    const top = new THREE.Mesh(new THREE.BoxGeometry(92, 3, 76), woodMat);
+    top.position.set(-6, -1.5, -8);
+    tables.add(top);
+    tables.rotation.y = 0.2;
+    // table runner with a dark ornamental border
+    const rc = document.createElement('canvas'); rc.width = 256; rc.height = 512;
+    const r2 = rc.getContext('2d'), rr = rng(5);
+    r2.fillStyle = '#b9ab98'; r2.fillRect(0, 0, 256, 512);
+    for (let i = 0; i < 2600; i++) { r2.fillStyle = `rgba(${rr() < 0.5 ? '70,60,50' : '235,225,205'},0.18)`; r2.fillRect(rr() * 256, rr() * 512, 2, 2); }
+    r2.fillStyle = '#1c2740'; r2.fillRect(0, 0, 256, 44); r2.fillRect(0, 468, 256, 44);
+    r2.fillStyle = '#b9ab98';
+    for (let x = 16; x < 256; x += 32) for (const y of [22, 490]) { r2.beginPath(); r2.ellipse(x, y, 9, 14, 0, 0, 7); r2.fill(); }
+    r2.fillStyle = '#1c2740';
+    for (let y = 80; y < 450; y += 36) for (let x = 24 + ((y / 36) % 2) * 18; x < 240; x += 36) { r2.fillRect(x - 1, y - 4, 2, 8); r2.fillRect(x - 4, y - 1, 8, 2); }
+    r2.beginPath(); r2.ellipse(128, 256, 30, 52, 0, 0, 7); r2.ellipse(84, 270, 20, 34, -0.5, 0, 7); r2.ellipse(172, 270, 20, 34, 0.5, 0, 7); r2.fill();
+    r2.fillRect(84, 296, 88, 12);
+    const rt = new THREE.CanvasTexture(rc); rt.colorSpace = THREE.SRGBColorSpace; rt.anisotropy = 4;
+    const runner = new THREE.Mesh(new THREE.PlaneGeometry(26, 56), new THREE.MeshStandardMaterial({ map: rt, roughness: 0.95, envMapIntensity: 0.5 }));
+    runner.rotation.x = -Math.PI / 2; runner.rotation.z = -0.28; runner.position.set(-19, 0.04, -7);
+    scene.add(runner);
+    // tea light in a cut-glass holder
+    const tea = new THREE.Group(); tea.position.set(-16, 0.05, -1);
+    const holder = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 1.9, 4.2, 20, 1, true),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, roughness: 0.05, envMapIntensity: 2.2, side: THREE.DoubleSide, emissive: 0xff9a3c, emissiveIntensity: 0.35 }));
+    holder.position.y = 2.1;
+    const wax = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 1.2, 16), new THREE.MeshStandardMaterial({ color: 0xfff1d8, emissive: 0xffb060, emissiveIntensity: 0.8 }));
+    wax.position.y = 0.6;
+    const flame = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(11, 5.5, 1.3) }));
+    flame.scale.set(1, 1.9, 1); flame.position.y = 2.0;
+    const glowL = new THREE.PointLight(0xff9a3c, 260, 70, 2); glowL.position.y = 4;
+    tea.add(holder, wax, flame, glowL); scene.add(tea);
+    spin.push((dt, t) => { const f = 0.85 + 0.15 * Math.sin(t * 11) * Math.sin(t * 7.3); flame.scale.set(1, 1.9 * f, 1); glowL.intensity = 260 * f; });
+    // ceiling fan
+    const fan = new THREE.Group(); fan.position.set(10, 50, -60);
+    const dark = new THREE.MeshStandardMaterial({ color: 0x241710, roughness: 0.6 });
+    const steel = new THREE.MeshStandardMaterial({ color: 0x8a8a88, roughness: 0.35, metalness: 0.8 });
+    const rotor = new THREE.Group();
+    for (let i = 0; i < 4; i++) { const bl = new THREE.Mesh(new THREE.BoxGeometry(21, 0.5, 5.2), dark); bl.position.x = 14; bl.rotation.x = 0.16; const h = new THREE.Group(); h.rotation.y = i * Math.PI / 2; h.add(bl); rotor.add(h); }
+    rotor.add(new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, 2.6, 16), steel));
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 9, 8), steel); rod.position.y = 5.5;
+    fan.add(rotor, rod); scene.add(fan);
+    spin.push((dt) => { rotor.rotation.y += dt * 1.5; });
+    const l1 = new THREE.DirectionalLight(0xffc58a, 1.4); l1.position.set(-20, 60, 30);
+    const l2 = new THREE.DirectionalLight(0xff9a50, 0.7); l2.position.set(50, 20, 10);
+    scene.add(l1, l2);
+  } else {
+    const top = new THREE.Mesh(new THREE.BoxGeometry(96, 1.4, 36), woodMat);
+    top.position.set(0, -0.7, -4);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(96, 1.4, 36), woodMat);
+    back.position.set(10, -0.7, -62);
+    const bench = new THREE.Mesh(new THREE.BoxGeometry(96, 1.2, 11), woodMat);
+    bench.position.set(4, -9.5, -33);
+    tables.add(top, back, bench);
+    tables.rotation.y = -0.16;
+    // The pyramid stall stands behind the tables, small and far so it stays in the frame.
+    const stall = buildPyramidStall();
+    stall.group.position.set(60, -7, -78); stall.group.rotation.y = -0.75; stall.group.scale.setScalar(0.6);
+    scene.add(stall.group);
+    spin.push((dt) => { stall.fan.rotation.y += dt * 0.45; });
+    // Warm light from the stalls so the wood keeps its colour under the blue sky.
+    const l1 = new THREE.DirectionalLight(0xffb672, 1.5); l1.position.set(40, 30, -30);
+    const l2 = new THREE.DirectionalLight(0xffc890, 0.9); l2.position.set(-30, 35, 45);
+    scene.add(l1, l2);
+  }
   scene.add(tables);
 
   // Coaster under the mug.
@@ -384,14 +505,6 @@ export function createEnvironment(renderer, scene, U) {
   glow.rotation.x = -Math.PI / 2; glow.position.y = 0.125; glow.renderOrder = 2;
   scene.add(glow);
 
-  // The pyramid stall stands behind the tables, small and far so it stays in the frame.
-  const stall = buildPyramidStall();
-  stall.group.position.set(60, -7, -78); stall.group.rotation.y = -0.75; stall.group.scale.setScalar(0.6);
-  // Warm light from the stalls so the wood keeps its colour under the blue sky.
-  const l1 = new THREE.DirectionalLight(0xffb672, 1.5); l1.position.set(40, 30, -30);
-  const l2 = new THREE.DirectionalLight(0xffc890, 0.9); l2.position.set(-30, 35, 45);
-  scene.add(l1, l2);
-  scene.add(stall.group);
-
-  return { dome, glow, tableTopY: 0.12, update(dt) { stall.fan.rotation.y += dt * 0.45; } };
+  let time = 0;
+  return { dome, glow, tableTopY: 0.12, update(dt) { time += dt; for (const f of spin) f(dt, time); } };
 }

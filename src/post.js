@@ -60,7 +60,7 @@ export class Pipeline {
 
     this.final = pass(/* glsl */`
       uniform sampler2D tScene, tBloom, tBlur1, tBlur2, tDepth;
-      uniform float uBloom, uDof, uFocus, uNear, uFar, uCA, uHaze, uWarp, uTime, uFade, uExposure;
+      uniform float uBloom, uDof, uFocus, uNear, uFar, uCA, uHaze, uWarp, uTime, uFade, uExposure, uRush;
       uniform vec3 uTint;
       varying vec2 vUv;
       vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
@@ -70,8 +70,14 @@ export class Pipeline {
         float r2 = dot(d, d);
         // ripple when the camera passes through the glass
         uv += d * sin(r2 * 38.0 - uTime * 14.0) * 0.035 * uWarp;
-        float ca = (uCA + 0.02 * uWarp) * r2;
+        float ca = (uCA + 0.02 * uWarp + 0.03 * uRush) * r2;
         vec3 col = vec3(texture2D(tScene, uv + d * ca).r, texture2D(tScene, uv).g, texture2D(tScene, uv - d * ca).b);
+        if (uRush > 0.001) {
+          // streaks toward the edges when the bubble is moving fast
+          float k = uRush * 0.045, n = hash(gl_FragCoord.xy + 7.0);      // jitter turns three taps into a smooth streak
+          vec3 st = texture2D(tScene, uv - d * k * (n + 0.2)).rgb + texture2D(tScene, uv - d * k * (n + 1.2)).rgb + texture2D(tScene, uv - d * k * (n + 2.2)).rgb;
+          col = mix(col, st / 3.0, min(0.75, uRush) * smoothstep(0.01, 0.2, r2));
+        }
         if (uDof > 0.001) {
           float z = texture2D(tDepth, uv).r;
           float lin = uNear * uFar / (uFar - z * (uFar - uNear));
@@ -93,7 +99,7 @@ export class Pipeline {
       tScene: { value: this.scene.texture }, tBloom: { value: this.up[0].texture }, tBlur1: { value: this.down[0].texture },
       tBlur2: { value: this.down[1].texture }, tDepth: { value: this.base.depthTexture },
       uBloom: { value: 0.07 }, uDof: { value: 0 }, uFocus: { value: 30 }, uNear: { value: 0.1 }, uFar: { value: 400 },
-      uCA: { value: 0.006 }, uHaze: { value: 0 }, uWarp: { value: 0 }, uTime: U.uTime, uFade: { value: 0 },
+      uCA: { value: 0.006 }, uRush: { value: 0 }, uHaze: { value: 0 }, uWarp: { value: 0 }, uTime: U.uTime, uFade: { value: 0 },
       uTint: { value: new THREE.Vector3(0, 0, 0) }, uExposure: { value: 1.0 },
     });
   }

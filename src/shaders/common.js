@@ -51,7 +51,13 @@ float fresnelTIR(float cosi) {
   float rp = (cosi - 1.33 * cost) / (cosi + 1.33 * cost);
   return clamp(0.5 * (rs * rs + rp * rp), 0.0, 1.0);
 }
-float dimple(float th, float y) {
+uniform vec4 uQuad;        // liquid boundary: A^2, B, YC, shape id
+uniform float uTop;        // above this height the wall is straight
+float innerR(float y) {
+  float yy = min(y, uTop) - uQuad.z;
+  return sqrt(max(0.01, uQuad.x - uQuad.y * yy * yy));
+}
+float dimpleKrug(float th, float y) {
   float d = 0.0;
   float sx = abs(th) / 0.76, sy = abs(y - 6.0) / 3.7;
   float sr = pow(pow(sx, 6.0) + pow(sy, 6.0), 1.0 / 6.0);
@@ -67,6 +73,14 @@ float dimple(float th, float y) {
   }
   return d;
 }
+float dimpleBarrel(float th, float y) {
+  float w = PI / 4.0;
+  float mask = smoothstep(0.62, 0.86, abs(th));
+  float e1 = length(vec2((fract(th / w + 0.5) - 0.5) * w / 0.33, (y - 4.7) / 1.72));
+  float e2 = length(vec2((fract(th / w) - 0.5) * w / 0.33, (y - 8.6) / 1.72));
+  return 0.17 * ((1.0 - smoothstep(0.45, 1.0, e1)) + (1.0 - smoothstep(0.45, 1.0, e2))) * mask;
+}
+float dimple(float th, float y) { return uQuad.w < 0.5 ? dimpleKrug(th, y) : dimpleBarrel(th, y); }
 `;
 
 // Beer volume: analytic path length through the liquid and the in-scattered colour.
@@ -80,7 +94,6 @@ uniform vec3 uFogBright;
 uniform float uShade;     // the drinker's shadow, 0..1
 uniform float uLevelY;
 uniform float uFogGain;   // brighter when the mug is seen from outside, backlit
-const float RI = 4.0;
 const float YB = 1.6;
 
 float beerPath(vec3 ro, vec3 p) {
@@ -88,9 +101,10 @@ float beerPath(vec3 ro, vec3 p) {
   float len = length(rd);
   rd /= max(len, 1e-5);
   float tEnter = 0.0;
-  float c = dot(ro.xz, ro.xz) - RI * RI;
+  float qy = ro.y - uQuad.z;
+  float c = dot(ro.xz, ro.xz) + uQuad.y * qy * qy - uQuad.x;
   if (c > 0.0) {
-    float a = dot(rd.xz, rd.xz), b = dot(ro.xz, rd.xz);
+    float a = dot(rd.xz, rd.xz) + uQuad.y * rd.y * rd.y, b = dot(ro.xz, rd.xz) + uQuad.y * qy * rd.y;
     float disc = b * b - a * c;
     if (disc <= 0.0 || a < 1e-6) return 0.0;
     tEnter = max(tEnter, (-b - sqrt(disc)) / a);

@@ -42,6 +42,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mug small { display: block; font-family: var(--body); font-size: 11px; font-weight: 600; opacity: .85; margin-top: 3px; }
 #warn { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); font-family: var(--display); font-weight: 700; font-size: clamp(34px, 8vw, 68px); color: #fff; letter-spacing: .03em; text-shadow: 0 0 22px var(--danger), 0 3px 12px rgba(0,0,0,.8); animation: pulse .5s ease-in-out infinite alternate; white-space: nowrap; }
 @keyframes pulse { from { opacity: .55; transform: translateX(-50%) scale(.97); } to { opacity: 1; transform: translateX(-50%) scale(1.03); } }
+#flash { position: absolute; left: 0; right: 0; top: 38%; text-align: center; font-family: var(--display); font-weight: 700; font-size: clamp(44px, 12vw, 110px); color: #fff8dc; text-shadow: 0 0 30px #ffb400, 0 4px 14px rgba(0,0,0,.7); opacity: 0; transform: scale(.6); transition: opacity .25s, transform .35s cubic-bezier(.2,1.6,.4,1); pointer-events: none; }
+#flash.on { opacity: 1; transform: scale(1); }
+.fizz { position: absolute; left: 0; right: 0; margin: 0 auto; bottom: max(18px, env(safe-area-inset-bottom)); width: min(46vw, 300px); text-align: center; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
+.fizz .meter { height: 12px; margin-top: 4px; border-radius: 8px; background: rgba(0,0,0,.45); border: 1px solid rgba(255,243,214,.35); overflow: hidden; }
+.fizz .meter i { display: block; height: 100%; background: linear-gradient(90deg, #ffd978, #fff6c8); transform-origin: left; transform: scaleX(0); }
+.fizz.on label { color: #fff6c8; } .fizz.on .meter { border-color: #fff; box-shadow: 0 0 14px #ffd978; } .fizz.on .meter i { background: linear-gradient(90deg, #fff, #9ff0ff); }
 #danger { position: absolute; left: 0; top: 0; color: var(--danger); font-size: 30px; line-height: 1; text-align: center; text-shadow: 0 0 10px #000; will-change: transform; }
 #danger span { display: block; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
 #toast { position: absolute; left: 0; right: 0; margin: 0 auto; width: fit-content; bottom: max(26%, 240px); max-width: min(86vw, 520px); text-align: center; font-size: 16px; font-weight: 600; padding: 10px 16px; border-radius: 14px; background: var(--panel); backdrop-filter: blur(6px); opacity: 0; transition: opacity .35s; }
@@ -61,7 +67,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .card.off { opacity: 0; pointer-events: none; }
 .card .inner { width: min(560px, 100%); padding: clamp(20px, 4vw, 34px); border-radius: 22px; background: rgba(26,16,9,.78); border: 1px solid rgba(255,217,120,.35); box-shadow: 0 20px 60px rgba(0,0,0,.5); backdrop-filter: blur(10px); text-align: center; }
 .card h1 { font-family: var(--display); font-weight: 700; font-size: clamp(46px, 11vw, 84px); line-height: .95; margin: 0; color: var(--gold); text-shadow: 0 3px 0 #6b3d05; }
-.card h2 { font-family: var(--display); font-weight: 600; font-size: clamp(20px, 4.4vw, 28px); margin: 6px 0 14px; color: var(--cream); }
+.card h2 { font-family: var(--display); font-weight: 600; font-size: clamp(20px, 4.4vw, 28px); margin: 6px 0 12px; color: var(--cream); }
 .card p { margin: 0 0 12px; font-size: 16px; line-height: 1.5; text-wrap: pretty; }
 .card p.dim { opacity: .8; font-size: 14px; }
 .card .stats { display: flex; justify-content: center; gap: 22px; margin: 14px 0 18px; flex-wrap: wrap; }
@@ -70,6 +76,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .card ul { list-style: none; padding: 0; margin: 12px 0 18px; display: grid; gap: 6px; font-size: 14px; text-align: left; }
 .card li { display: grid; grid-template-columns: 9.5em 1fr; gap: 10px; align-items: baseline; }
 .card li b { color: var(--gold); font-weight: 700; }
+.card .venues { display: flex; gap: 10px; justify-content: center; margin: 4px 0 14px; }
+.card .venues button { flex: 1; max-width: 200px; padding: 9px 10px; border-radius: 14px; border: 2px solid rgba(255,243,214,.3); background: rgba(255,255,255,.06); font-weight: 700; font-size: 14px; }
+.card .venues button i { display: block; height: 34px; border-radius: 8px; margin-bottom: 6px; }
+.card .venues button.vasar i { background: radial-gradient(circle at 70% 60%, #ffcf6a 0 9%, transparent 10%), radial-gradient(circle at 30% 40%, #ffb84a 0 7%, transparent 8%), radial-gradient(circle at 52% 70%, #ffd98a 0 6%, transparent 7%), linear-gradient(180deg, #0a1e66, #2a55b8 70%, #e8b85a 71%); }
+.card .venues button.kocsma i { background: radial-gradient(circle at 50% 62%, #ffb648 0 10%, rgba(255,160,60,.35) 11% 26%, transparent 27%), repeating-linear-gradient(90deg, #d8cfbc 0 22%, #2a1a10 22% 26%), #d8cfbc; }
+.card .venues button.sel { border-color: var(--gold); background: rgba(255,217,120,.16); }
 .card button.go { font-family: var(--display); font-weight: 700; font-size: 26px; padding: 10px 34px 12px; border-radius: 999px; border: 0; background: linear-gradient(180deg, #ffd978, #e59a14); color: #2a1703; box-shadow: 0 6px 0 #7a4706, 0 12px 24px rgba(0,0,0,.4); }
 .card button.go:active { transform: translateY(4px); box-shadow: 0 2px 0 #7a4706; }
 .card .load { font-family: var(--display); font-size: 28px; margin: 0; }

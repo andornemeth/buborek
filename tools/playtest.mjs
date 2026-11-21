@@ -13,7 +13,7 @@ const page = await browser.newPage({ viewport: { width: 360, height: 220 } });
 const logs = [];
 page.on('console', (m) => { if (m.type() === 'error') logs.push(m.text()); });
 page.on('pageerror', (e) => logs.push('pageerror: ' + e.message));
-await page.goto(server.resolvedUrls.local[0] + '?scale=0.5');
+await page.goto(server.resolvedUrls.local[0] + '?scale=0.5' + (process.env.HELY ? '&hely=' + process.env.HELY : ''));
 await page.waitForFunction(() => window.__dbg, null, { timeout: 60000 });
 const until = (fn, arg, timeout = 120000) => page.waitForFunction(fn, arg, { timeout, polling: 50 });
 const results = [];
@@ -26,17 +26,25 @@ await until(() => window.__dbg.game.state === 'play');
 check('start -> play', true);
 
 // absorb a smaller bubble
-const r0 = await G(() => { const g = window.__dbg.game; g.player.pos.set(0, 6, 0); g.bTarget[0] = 0.05; g.bPos.set([0.02, 6.0, 0.0], 0); return g.player.r; });
+const r0 = await G(() => { const g = window.__dbg.game; g.player.invuln = 99; g.player.pos.set(0, 6, 0); g.bTarget[0] = 0.05; g.bPos.set([0.02, 6.0, 0.0], 0); return g.player.r; });
 await until((r0) => window.__dbg.game.player.r > r0, r0).then(() => check('absorbing grows the bubble', true), () => check('absorbing grows the bubble', false));
 check('absorbing scores', (await G(() => window.__dbg.game.score)) > 0);
 
-// bigger bubble bounces, no growth
-const r1 = await G(() => { const g = window.__dbg.game; g.player.pos.set(1, 5, 1); g.bTarget[1] = 0.9; g.bPos.set([1.05, 5.0, 1.0], 3); return g.player.r; });
-await page.waitForTimeout(600);
-check('bigger bubble does not get absorbed', Math.abs((await G(() => window.__dbg.game.player.r)) - r1) < 0.02);
+// a full fizz meter starts fizz mode on the next bubble
+await G(() => { const g = window.__dbg.game; g.fizz = 0.99; g.player.pos.set(0, 6, 0); g.bTarget[2] = 0.03; g.bPos.set([0.02, 6.0, 0.0], 6); });
+await until(() => window.__dbg.game.fizzT > 0).then(() => check('fizz mode starts when the meter fills', true), () => check('fizz mode starts when the meter fills', false));
+await G(() => { const g = window.__dbg.game; g.hops[0].pos.copy(g.player.pos); g.nHops = Math.max(1, g.nHops); });
+const sc0 = await G(() => window.__dbg.game.score);
+await until((sc0) => window.__dbg.game.score >= sc0 + 150, sc0).then(() => check('fizzing smashes hop shards', true), () => check('fizzing smashes hop shards', false));
+await G(() => { const g = window.__dbg.game; g.fizzT = 0.01; });
+await until(() => window.__dbg.game.fizzT === 0);
+
+// a bigger bubble bites
+const r1 = await G(() => { const g = window.__dbg.game; g.player.r = 0.08; g.player.invuln = 0; g.player.pos.set(1, 5, 1); g.bTarget[1] = 0.9; g.bPos.set([1.05, 5.0, 1.0], 3); return g.player.r; });
+await until((r1) => window.__dbg.game.player.r < r1 * 0.9, r1).then(() => check('a bigger bubble bites', true), () => check('a bigger bubble bites', false));
 
 // the bubble rises by itself and dives while the dive key is held
-const y0 = await G(() => { const g = window.__dbg.game; g.player.pos.set(0, 5, 0); g.player.vel.set(0, 0, 0); return 5; });
+const y0 = await G(() => { const g = window.__dbg.game; g.player.invuln = 99; g.player.pos.set(0, 5, 0); g.player.vel.set(0, 0, 0); return 5; });
 await until((y0) => window.__dbg.game.player.pos.y > y0 + 0.25, y0).then(() => check('bubble rises on its own', true), () => check('bubble rises on its own', false));
 await page.keyboard.down('ShiftLeft');
 const y1 = await G(() => window.__dbg.game.player.pos.y);
@@ -44,16 +52,16 @@ await until((y1) => window.__dbg.game.player.pos.y < y1 - 0.25, y1).then(() => c
 await page.keyboard.up('ShiftLeft');
 
 // hop shard shrinks
-const r2 = await G(() => { const g = window.__dbg.game; g.player.r = 0.2; g.player.invuln = 0; g.hops[0].pos.copy(g.player.pos); return g.player.r; });
+const r2 = await G(() => { const g = window.__dbg.game; g.player.r = 0.12; g.player.invuln = 0; g.hops[0].pos.copy(g.player.pos); return g.player.r; });
 await until(() => window.__dbg.game.player.invuln > 0).then(async () => check('hop shard shrinks the bubble', (await G(() => window.__dbg.game.player.r)) < r2), () => check('hop shard shrinks the bubble', false));
 
 // foam gate refuses a small bubble
-await G(() => { const g = window.__dbg.game; g.player.r = 0.1; g.player.invuln = 0; g.nHops = 0; g.player.pos.set(0, g.level - 0.05, 0); });
+await G(() => { const g = window.__dbg.game; g.player.r = 0.1; g.player.invuln = 99; g.nHops = 0; g.player.pos.set(0, g.level - 0.05, 0); });
 await page.waitForTimeout(700);
 check('foam gate holds back a small bubble', (await G(() => window.__dbg.game.state)) === 'play');
 
 // sip lowers the level and swallows near the mouth
-const l0 = await G(() => { const g = window.__dbg.game; g.player.pos.set(0, 3, 3); g.sip.t = 0.05; return g.level; });
+const l0 = await G(() => { const g = window.__dbg.game; g.player.invuln = 99; g.player.pos.set(0, 3, 3); g.sip.t = 0.05; return g.level; });
 await until(() => window.__dbg.game.sip.phase === 'drink');
 await G(() => { const g = window.__dbg.game; g.player.pos.copy(g.mouth); });
 await until(() => window.__dbg.game.state === 'dead');
@@ -66,7 +74,7 @@ check('restart resets score and level', await G(() => window.__dbg.game.score ==
 check('sip lowered the level', (await G(() => window.__dbg.game.sip.done)) >= 0 && l0 > 11);
 
 // escape through the foam when big enough
-await G(() => { const g = window.__dbg.game; g.nHops = 0; g.player.r = g.gate + 0.02; g.player.pos.set(0, g.level - 0.1, 0); });
+await G(() => { const g = window.__dbg.game; g.nHops = 0; g.player.invuln = 99; g.player.r = g.gate + 0.02; g.player.pos.set(0, g.level - 0.1, 0); });
 await until(() => window.__dbg.game.state === 'escape');
 check('big bubble breaks through the foam', true);
 await until(() => !document.getElementById('card').classList.contains('off'), null, 240000);
@@ -76,7 +84,7 @@ await until(() => window.__dbg.game.state === 'play');
 check('next mug', (await G(() => window.__dbg.game.mug)) === 2);
 
 // pop at minimum size
-await G(() => { const g = window.__dbg.game; g.player.r = 0.065; g.player.invuln = 0; g.nHops = 1; g.hops[0].pos.copy(g.player.pos); });
+await G(() => { const g = window.__dbg.game; g.player.r = 0.04; g.player.invuln = 0; g.nHops = 1; g.hops[0].pos.copy(g.player.pos); });
 await until(() => window.__dbg.game.state === 'dead');
 check('smallest bubble pops', (await G(() => window.__dbg.game.deathCause)) === 'pop');
 await until(() => !document.getElementById('card').classList.contains('off'));
@@ -84,7 +92,7 @@ await page.click('button.go');
 await until(() => window.__dbg.game.state === 'play');
 
 // last sip empties the mug
-await G(() => { const g = window.__dbg.game; g.nHops = 0; g.player.pos.set(0, 2.5, 3.5); g.sip.done = g.nSips; g.sip.t = 0.05; });
+await G(() => { const g = window.__dbg.game; g.nHops = 0; g.player.invuln = 99; g.player.pos.set(0, 2.5, 2.8); g.sip.done = g.nSips; g.sip.t = 0.05; });
 await until(() => window.__dbg.game.state === 'dead', null, 240000);
 check('last sip ends the run', ['empty', 'swallowed'].includes(await G(() => window.__dbg.game.deathCause)), await G(() => window.__dbg.game.deathCause));
 

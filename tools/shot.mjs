@@ -20,7 +20,7 @@ const page = await browser.newPage({ viewport: { width: +W, height: +H }, device
 const logs = [];
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`[${m.type()}] ${m.text()}`); });
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
-await page.goto(url + '?scale=1');
+await page.goto(url + '?scale=1' + (process.env.HELY ? '&hely=' + process.env.HELY : ''));
 await page.waitForFunction(() => window.__dbg || document.querySelector('#cardInner h2'), null, { timeout: 60000 });
 const wait = (ms) => page.waitForTimeout(ms);
 // The software renderer is slow, so wait on game state and rendered frames rather than wall-clock time.
@@ -40,7 +40,7 @@ if (steps.length === 0 || steps.some((s) => ['inside', 'outside', 'sip', 'wall',
   await viewIs(0); await frames(6);
   if (want('inside')) await snap('02-inside');
   if (want('wall')) {
-    await page.evaluate(() => { const { game, rig } = window.__dbg; game.player.pos.set(0, 6.5, 2.6); game.player.r = 0.2; rig.yaw = Math.PI; rig.pitchIn = 0.1; });
+    await page.evaluate(() => { const { game, rig } = window.__dbg; game.player.pos.set(0, 6.5, 2.6); game.player.r = 0.1; game.player.invuln = 99; rig.yaw = Math.PI; rig.pitchIn = 0.1; });
     await frames(5); await snap('02b-wall');
     await page.evaluate(() => { const { rig } = window.__dbg; rig.pitchIn = 1.1; });
     await frames(5); await snap('02c-up');
@@ -57,11 +57,19 @@ if (steps.length === 0 || steps.some((s) => ['inside', 'outside', 'sip', 'wall',
     await phase('drink'); await viewIs(0); await frames(3); await snap('05-sip-inside');
   }
 }
+if (steps.includes('chain')) {
+  await page.evaluate(() => document.querySelector('button.go').click());
+  await viewIs(0);
+  await page.evaluate(() => { const { game, rig } = window.__dbg; const s = game.sites[3]; game.player.invuln = 99; game.player.pos.set(s[0] + 0.25, 3.2, s[2] + 0.35); game.player.vel.set(0, 0, 0); rig.yaw = Math.atan2(-0.25, 0.35) + Math.PI; rig.pitchIn = 0.35; game.fizz = 0.97; });
+  await frames(3); await snap('08-chain');
+  await page.waitForFunction(() => window.__dbg.game.fizzT > 0, null, { timeout: 5000 }).catch(() => page.evaluate(() => { window.__dbg.game.fizzT = 5; }));
+  await frames(6); await snap('09-fizz');
+}
 if (steps.includes('escape')) {
   await page.evaluate(() => document.querySelector('button.go').click());
   await viewIs(0);
-  await page.evaluate(() => { const g = window.__dbg.game; g.nHops = 0; g.player.r = g.gate + 0.03; g.player.pos.set(0.5, g.level - 0.1, 0.5); });
-  await page.waitForFunction(() => window.__dbg.game.state === 'escape' && window.__dbg.game.escapeT > 1.9, null, { timeout: 240000 });
+  await page.evaluate(() => { const g = window.__dbg.game; g.nHops = 0; g.player.r = g.gate + 0.03; g.player.pos.set(0.5, g.level - 0.3, 0.5); });
+  await page.waitForFunction(() => window.__dbg.game.state === 'escape' && window.__dbg.game.escapeT > 2.6, null, { timeout: 240000 });
   await snap('06-escape');
   await page.waitForFunction(() => !document.getElementById('card').classList.contains('off'), null, { timeout: 240000 });
   await frames(4); await snap('07-escape-card');

@@ -1,6 +1,6 @@
 // One camera, two views: inside the beer behind the bubble, and orbiting the mug from outside.
 import * as THREE from 'three';
-import { RI, YB, clamp, lerp, smoothstep } from './params.js';
+import { clamp, lerp, smoothstep } from './params.js';
 
 const fwd = new THREE.Vector3(), tmp = new THREE.Vector3(), pIn = new THREE.Vector3(), pOut = new THREE.Vector3();
 const qIn = new THREE.Quaternion(), qOut = new THREE.Quaternion(), qMug = new THREE.Quaternion();
@@ -11,7 +11,7 @@ export class Rig {
     this.camera = camera;
     this.yaw = 0.35; this.pitchIn = 0.25; this.pitchOut = -0.15;
     this.view = 1; this.target = 1;           // 0 inside, 1 outside
-    this.dist = 28; this.e = 1; this.shift = 0; this.shiftTo = 0;
+    this.dist = 28; this.e = 1; this.shift = 0; this.shiftTo = 0; this.kick = 0;
     this.forward = new THREE.Vector3(0, 0, -1); this.right = new THREE.Vector3(1, 0, 0); this.flat = new THREE.Vector3(0, 0, -1);
   }
   goInside() { this.target = 0; }
@@ -19,7 +19,7 @@ export class Rig {
   toggle() { this.target = this.target > 0.5 ? 0 : 1; }
   look(dx, dy) {
     this.yaw += dx * 0.0045;
-    if (this.target > 0.5) this.pitchOut = clamp(this.pitchOut - dy * 0.0035, -1.15, 0.02);
+    if (this.target > 0.5) this.pitchOut = clamp(this.pitchOut - dy * 0.0035, -1.15, 0.36);
     else this.pitchIn = clamp(this.pitchIn - dy * 0.0045, -1.35, 1.35);
   }
   zoom(d) {
@@ -40,12 +40,12 @@ export class Rig {
     const cp = Math.cos(this.pitchIn), sp = Math.sin(this.pitchIn);
     fwd.set(sy * cp, sp, -cy * cp);
     this.forward.copy(fwd); this.right.set(cy, 0, sy); this.flat.set(sy, 0, -cy);
-    const want = 0.5 + 5.2 * P.r * P.scale;
+    const want = 0.27 + 5.2 * P.r * P.scale;
     let d = want;
     for (let k = 0; k < 14; k++) {
       d = want * (1 - k / 14);
       tmp.copy(P.pos).addScaledVector(fwd, -d);
-      if (Math.hypot(tmp.x, tmp.z) < RI - 0.14 && tmp.y > YB + 0.1 && game.depth(tmp) > 0.1) break;
+      if (game.inside(tmp, 0.1)) break;
     }
     pIn.copy(P.pos).addScaledVector(fwd, -d);
     m.lookAt(pIn, tmp.copy(pIn).add(fwd), UP); qIn.setFromRotationMatrix(m);
@@ -64,7 +64,7 @@ export class Rig {
     const c = this.camera;
     c.position.lerpVectors(pIn, pOut, e);
     c.quaternion.slerpQuaternions(qIn, qOut, e);
-    c.fov = lerp(74, 42, e); c.near = lerp(0.015, 0.5, e); c.far = 500; c.aspect = aspect;
+    c.fov = lerp(76 + this.kick, 42, e); c.near = lerp(0.015, 0.5, e); c.far = 500; c.aspect = aspect;
     c.updateProjectionMatrix(); c.updateMatrixWorld();
     this.focus = pOut.distanceTo(tgt);
   }

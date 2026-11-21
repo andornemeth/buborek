@@ -1,5 +1,5 @@
 // DOM overlay: score, gauges, warnings, story cards, touch controls.
-import { L0, YB } from './params.js';
+import { L0, YB, R_START, THEMES } from './params.js';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => n.toLocaleString('hu-HU');
@@ -13,6 +13,7 @@ const STORY = [
 ];
 const DEATH = {
   pop: ['Kipukkadtál', 'Egy komlószilánk túl éles volt hozzád.'],
+  absorbed: ['Elnyeltek', 'Egy nagyobb buborék bekebelezett. Legközelebb előbb nőj meg a zöldekből.'],
   swallowed: ['Megittak', 'A Nagy Ivó egyetlen korttyal elnyelt. Egészségére.'],
   empty: ['Elfogyott a sör', 'Az utolsó korttyal te is lecsúsztál. Nem nőttél elég nagyra időben.'],
 };
@@ -23,7 +24,8 @@ export class Hud {
     this.el = { hud: $('hud'), score: $('score'), combo: $('combo'), mugNo: $('mugNo'), beer: $('beerBar'), size: $('sizeBar'),
       gauge: $('sizeBar').parentElement, tick: $('gateTick'), warn: $('warn'), danger: $('danger'), toast: $('toast'),
       stick: $('stick'), knob: $('stick').firstElementChild, dash: $('btnDash'), dive: $('btnDive'), goal: $('goal'), view: $('btnView'), sound: $('btnSound'),
-      card: $('card'), inner: $('cardInner') };
+      card: $('card'), inner: $('cardInner'), flash: $('flash'), fizz: $('fizzBar'), fizzBox: $('fizzBar').parentElement.parentElement };
+    this.flashT = 0;
     this.toastT = 0; this.shown = {};
     this.el.dash.addEventListener('pointerdown', (e) => { e.preventDefault(); input.dash = true; });
     this.el.view.addEventListener('click', () => { input.toggle = true; this.el.view.blur(); });
@@ -39,12 +41,13 @@ export class Hud {
     const b = this.el.inner.querySelector('button.go');
     if (b) { b.addEventListener('click', () => { this.el.card.classList.add('off'); onGo(); }, { once: true }); b.focus({ preventScroll: true }); }
   }
-  title(best, onGo) {
+  title(best, themeId, onGo, onVenue) {
     const touch = matchMedia('(pointer: coarse)').matches;
+    const venues = Object.entries(THEMES).map(([id, t]) => `<button class="${id}${id === themeId ? ' sel' : ''}" data-venue="${id}"><i></i>${t.name}</button>`).join('');
     this.card(`
       <h1>Buborék</h1><h2>Út a habkoronáig</h2>
-      <p>Egy karcolásból születtél a korsó alján. A buborékok legendája szerint aki elég nagyra nő, áttöri a habkoronát, és szabad levegőként száll fel a vásár fényei fölé.</p>
-      <p>Csakhogy a sör tengere fogy: <b>a Nagy Ivó szomjas.</b></p>
+      <div class="venues">${venues}</div>
+      <p>Egy karcolásból születtél a korsó alján. Aki elég nagyra nő, áttöri a habkoronát, és szabadon száll fel. Csakhogy a sör fogy: <b>a Nagy Ivó szomjas.</b></p>
       <ul>${touch ? `
         <li><b>Bal hüvelykujj</b><span>úszás oldalra, előre, hátra</span></li>
         <li><b>Merülés gomb</b><span>lefelé, amíg nyomva tartod</span></li>
@@ -55,9 +58,10 @@ export class Hud {
         <li><b>Egérhúzás</b><span>körbenézés</span></li>
         <li><b>Szóköz · Tab</b><span>lendület · a korsó kívülről</span></li>`}
       </ul>
-      <p class="dim"><b>A buborék magától száll felfelé.</b> 1. Ússz neki a zölden csillogó, kisebb buborékoknak: megnősz tőlük. 2. Kerüld a komlószilánkot. 3. Ha megtelt a Méret, hagyd felszállni a habig.</p>
+      <p class="dim"><b>A buborék magától száll felfelé.</b> 1. Száguldj végig a <b style="color:#8dff9e">zöld</b> buboréksorokon: megnősz, és ha megtelik a Pezsgés, pár másodpercre megállíthatatlan vagy. 2. Kerüld a <b style="color:#ff8a70">piros</b> buborékokat és a komlószilánkot. 3. Ha megtelt a Méret, törd át a habot!</p>
       ${best ? `<p class="dim">Rekordod: <b>${fmt(best)}</b></p>` : ''}
       <button class="go">Felszállás</button>`, onGo);
+    for (const b of this.el.inner.querySelectorAll('[data-venue]')) b.addEventListener('click', () => { if (b.dataset.venue !== themeId) onVenue(b.dataset.venue); });
   }
   escaped(game, bonus, onGo) {
     this.card(`
@@ -77,10 +81,12 @@ export class Hud {
       <button class="go">Újra</button>`, onGo);
   }
 
+  flash(text, secs = 1.4) { this.el.flash.textContent = text; this.el.flash.classList.add('on'); this.flashT = secs; }
   toast(html, secs = 2.6) { this.el.toast.innerHTML = html; this.el.toast.classList.add('on'); this.toastT = secs; }
 
   update(dt, game, rig, playing, mouthScreen) {
     const e = this.el;
+    if (this.flashT > 0) { this.flashT -= dt; if (this.flashT <= 0) e.flash.classList.remove('on'); }
     e.hud.hidden = !playing;
     if (!playing) return;
     const set = (k, v, f) => { if (this.shown[k] !== v) { this.shown[k] = v; f(v); } };
@@ -98,18 +104,20 @@ export class Hud {
     set('dashcd', P.dashCd > 0, (v) => { e.dash.classList.toggle('cd', v); });
 
     // one line that always says what to do next
-    const pct = Math.round(100 * Math.max(0, Math.min(1, (P.r - 0.085) / (game.gate - 0.085))));
+    const pct = Math.round(100 * Math.max(0, Math.min(1, (P.r - R_START) / (game.gate - R_START))));
+    e.fizz.style.transform = `scaleX(${(game.fizzT > 0 ? game.fizzT / 5 : game.fizz).toFixed(3)})`;
+    set('fizzing', game.fizzT > 0, (v) => { e.fizzBox.classList.toggle('on', v); e.fizzBox.firstElementChild.textContent = v ? 'PEZSGÉS! Megállíthatatlan vagy' : 'Pezsgés'; });
     const sipNow = game.warning > 0 && game.state === 'play';
-    const goalKey = sipNow ? 'sip' : game.state !== 'play' ? 'none' : P.r >= game.gate ? 'ready' : !game.moved ? 'move' : game.eaten < 3 ? 'eat' : 'grow' + pct;
+    const goalKey = sipNow ? 'sip' : game.state !== 'play' ? 'none' : P.r >= game.gate ? 'ready' : !game.moved ? 'move' : game.eaten < 5 ? 'eat' : 'grow' + pct;
     set('goal', goalKey, (k) => {
       const t = this.touchUi;
       e.goal.hidden = k === 'none';
       e.goal.className = k === 'sip' ? 'alarm' : k === 'ready' ? 'ready' : '';
       e.goal.innerHTML = k === 'sip' ? `Korty! Merülj le, és maradj távol a piros nyíltól (${t ? 'Merülés gomb' : 'Shift'}).`
-        : k === 'ready' ? 'Elég nagy vagy! Engedd el, és szállj fel a habig ↑'
+        : k === 'ready' ? 'Elég nagy vagy! Fel a habig, és törd át! ↑'
         : k === 'move' ? (t ? 'Húzd a <b>bal hüvelykujjad</b> a képernyőn: így úszol.' : 'Ússz a <b>W A S D</b> gombokkal, nézz körbe egérhúzással.')
-        : k === 'eat' ? `Ússz neki a <span class="g">zölden csillogó</span> kisebb buborékoknak (${game.eaten}/3). Lefelé: ${t ? '<b>Merülés</b> gomb' : '<b>Shift</b>'}.`
-        : `Nőj tovább a <span class="g">zöld</span> buborékokkal: <b>${pct}%</b> a habhoz.`;
+        : k === 'eat' ? `Állj rá egy <span class="g">zöld</span> buboréksorra, és száguldj végig rajta (${game.eaten}/5). Lefelé: ${t ? '<b>Merülés</b>' : '<b>Shift</b>'}.`
+        : `Nőj a <span class="g">zöldekből</span>, kerüld a <span style="color:#ff8a70">pirosakat</span>: <b>${pct}%</b> a habhoz.`;
     });
 
     // arrow that points at the drinker's mouth while a sip threatens

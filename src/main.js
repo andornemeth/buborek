@@ -1,6 +1,6 @@
 import './style.css';
 import * as THREE from 'three';
-import { quality, isMobile, RI, YB, L0, clamp, lerp } from './params.js';
+import { quality, YB, L0, clamp, lerp, THEMES, SHAPES, currentThemeId } from './params.js';
 import { createEnvironment } from './environment.js';
 import { createMug } from './mug.js';
 import { createBubbles } from './bubbles.js';
@@ -26,12 +26,13 @@ async function boot() {
   };
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 500);
-  const env = createEnvironment(renderer, scene, U);
-  const mug = await createMug(U);
+  const themeId = currentThemeId(), theme = THEMES[themeId];
+  const env = createEnvironment(renderer, scene, U, themeId);
+  const mug = await createMug(U, theme);
   mug.group.position.y = env.tableTopY;
   scene.add(mug.group);
 
-  const game = new Game();
+  const game = new Game(SHAPES[theme.shape], theme.foam);
   const things = createBubbles(mug, U, game);
   const pipe = new Pipeline(renderer, scene, U);
   const rig = new Rig(camera);
@@ -64,11 +65,13 @@ async function boot() {
   };
 
   // --- flow between title, play, escape and game over ---
-  let fade = 0, fadeTo = 0, fadeTint = [0, 0, 0], cardUp = true, warp = 0, wasOutside = true, lastBonus = 0;
+  let fade = 0, fadeTo = 0, fadeTint = [0, 0, 0], cardUp = true, warp = 0, wasOutside = true, lastBonus = 0, rush = 0, broke = false;
   const begin = (fn) => { sound.start(); fn(); rig.goInside(); cardUp = false; rig.pitchIn = 0.3; };
-  hud.title(game.best, () => begin(() => {
-    game.newRun();
-  }));
+  hud.title(game.best, themeId, () => begin(() => { game.newRun(); }), (id) => {
+    try { localStorage.setItem('buborek-hely', id); } catch { /* ignore */ }
+    const q = new URLSearchParams(location.search); q.set('hely', id); location.search = q.toString();
+  });
+  if (themeId === 'kocsma') rig.pitchOut = -0.1;
   document.getElementById('btnSound').addEventListener('click', (e) => {
     sound.setMuted(!sound.muted); e.currentTarget.textContent = sound.muted ? 'Hang: ki' : 'Hang: be'; e.currentTarget.blur();
   });
@@ -105,18 +108,26 @@ async function boot() {
     for (const ev of game.events) {
       if (ev.type === 'absorb') { sound.absorb(ev.ratio, game.combo); if (game.combo > 1 && game.combo % 3 === 0) hud.toast(`<span class="pts">×${game.combo} sorozat!</span>`, 1.2); }
       else if (ev.type === 'hit') { sound.hit(); }
+      else if (ev.type === 'fizz') { sound.fizzUp(); hud.flash('PEZSGÉS!', 1.3); }
+      else if (ev.type === 'smash') { sound.pop(); hud.toast('<span class="pts">Szétzúztad! +150</span>', 1); }
+      else if (ev.type === 'ready') { sound.ready(); hud.flash('Fel a habba!', 1.5); }
       else if (ev.type === 'dash') sound.dash();
       else if (ev.type === 'bump') sound.bump();
       else if (ev.type === 'toast') hud.toast(ev.text, 3);
       else if (ev.type === 'warn') sound.warn();
       else if (ev.type === 'sip') sound.gulp();
-      else if (ev.type === 'escape') { lastBonus = ev.bonus; rig.goOutside(); rig.pitchOut = -0.3; hud.toast('Áttörted a habot!', 2.5); }
+      else if (ev.type === 'escape') { lastBonus = ev.bonus; broke = false; fadeTo = 0.92; fadeTint = [2.3, 2.1, 1.7]; warp = 1; sound.breakFoam(); }
       else if (ev.type === 'free') sound.free();
       else if (ev.type === 'dead') {
         if (ev.cause === 'pop') sound.pop(); else { fadeTo = 1; fadeTint = [0.02, 0.005, 0.0]; }
       }
     }
-    if (game.state === 'escape' && game.escapeT > 4.6 && !cardUp) {
+    // Breaking through the foam: white-out inside, then burst out above the mug.
+    if (game.state === 'escape' && !broke) {
+      warp = 1;
+      if (game.escapeT > 0.9) { broke = true; rig.goOutside(); rig.view = 1; rig.pitchOut = -0.34; fadeTo = 0; hud.flash('PROST!', 2.2); }
+    }
+    if (game.state === 'escape' && game.escapeT > 5.2 && !cardUp) {
       cardUp = true;
       hud.escaped(game, lastBonus, () => { fade = 1; fadeTo = 0; fadeTint = [2.4, 2.1, 1.6]; begin(() => game.nextMug()); hud.toast(`${game.mug}. korsó`, 2); });
     }
@@ -131,14 +142,20 @@ async function boot() {
     mug.group.position.set(0, env.tableTopY + game.lift * 5.0, -game.lift * 2.2);
     mug.mu.uSigma.value = game.sigma; mug.mu.uShade.value = game.shade;
     mug.mu.uFogGain.value = lerp(1.0, 1.75, rig.e);
-    mug.mu.uEdible.value = playing ? game.player.r * 0.93 : 0;
+    const fizzing = game.fizzT > 0;
+    mug.mu.uEdible.value = playing ? game.player.r * (fizzing ? 1.6 : 0.93) : 0;
+    mug.mu.uDanger.value = playing && !fizzing ? game.player.r * 1.08 : 1e9;
+    // speed you can feel: wider view and streaks when rising fast or fizzing
+    const sp = clamp((game.player.vel.length() - 1.0) / 3.5, 0, 1);
+    rush += ((playing ? Math.max(sp * 0.6, fizzing ? 0.85 : 0) : 0) - rush) * Math.min(1, dtReal * 5);
+    rig.kick = rush * 16;
     env.update(dtReal);
     rig.shiftTo = cardUp && cssW / cssH > 1.35 ? 6.5 : 0;
     rig.update(dtReal, game, mug.group, cssW / cssH);
     mug.updateCamera(camera);
     U.uProj.value.set(camera.projectionMatrix.elements[0], camera.projectionMatrix.elements[5]);
     camL.copy(mug.mu.uCam.value);
-    const outsideGlass = Math.hypot(camL.x, camL.z) > RI - 0.02 || camL.y < YB || game.depth(camL) < 0;
+    const outsideGlass = !game.inside(camL, 0);
     if (outsideGlass !== wasOutside) { wasOutside = outsideGlass; warp = 1; }
     warp = Math.max(0, warp - dtReal * 2.2);
     mug.glass.visible = outsideGlass;
@@ -148,7 +165,7 @@ async function boot() {
 
     const f = pipe.final.uniforms;
     f.uDof.value = rig.e * rig.e; f.uFocus.value = rig.focus;
-    f.uHaze.value = game.haze * (1 - rig.e); f.uWarp.value = warp;
+    f.uHaze.value = game.haze * (1 - rig.e); f.uWarp.value = warp; f.uRush.value = rush * (1 - rig.e);
     f.uFade.value = fade; f.uTint.value.set(fadeTint[0], fadeTint[1], fadeTint[2]);
     f.uBloom.value = lerp(0.1, 0.06, rig.e);
     pipe.render(scene, camera);

@@ -58,6 +58,9 @@ export class Sound {
   gulp() { this.tone(150, 60, 0.5, 0.45); setTimeout(() => this.tone(130, 50, 0.5, 0.4), 620); }
   free() { [660, 880, 1100, 1320].forEach((f, i) => setTimeout(() => this.tone(f, f * 1.01, 0.7, 0.12), i * 110)); this.burst(4000, 0.3, 0.2); }
   pop() { this.burst(2600, 0.12, 0.6); }
+  fizzUp() { [392, 523, 659, 784, 1047].forEach((f, i) => setTimeout(() => this.tone(f, f * 1.02, 0.25, 0.14, 'triangle'), i * 70)); this.burst(6000, 0.6, 0.25); }
+  ready() { [523, 784].forEach((f, i) => setTimeout(() => this.tone(f, f, 0.35, 0.16), i * 140)); }
+  breakFoam() { this.burst(5000, 1.1, 0.5); this.burst(900, 0.5, 0.3); this.tone(180, 900, 0.9, 0.2, 'triangle'); }
   bell() {
     // far-off chimes from the market, more audible outside the glass
     const notes = [523, 659, 784, 880, 1047];

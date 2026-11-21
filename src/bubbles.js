@@ -21,10 +21,10 @@ export function createBubbles(mug, U, game) {
   const bubbleMat = new THREE.ShaderMaterial({
     uniforms: mu, alphaToCoverage: true,
     vertexShader: /* glsl */`
-      attribute vec3 aPos; attribute float aRad; uniform float uEdible;
+      attribute vec3 aPos; attribute float aRad; uniform float uEdible, uDanger;
       varying vec2 vUv; varying vec3 vC; varying vec3 vCw; varying float vEd;
       void main() {
-        vUv = position.xy; vC = aPos; vEd = step(aRad, uEdible);
+        vUv = position.xy; vC = aPos; vEd = step(aRad, uEdible) - step(uDanger, aRad);
         vec4 w = modelMatrix * vec4(aPos, 1.0); vCw = w.xyz;
         vec4 mv = viewMatrix * w;
         mv.xy += position.xy * aRad;
@@ -50,7 +50,9 @@ export function createBubbles(mug, U, game) {
         vec3 col = mix(thru, refl, F);
         col *= 1.0 - 0.35 * smoothstep(0.9, 1.0, r2);
         // food: bubbles small enough to absorb glint green
-        col += vEd * vec3(0.25, 1.35, 0.5) * (0.3 + 0.9 * pow(1.0 - nV.z, 1.6)) * (0.8 + 0.2 * sin(uTime * 5.0 + vC.x * 9.0));
+        float glint = (0.3 + 0.9 * pow(1.0 - nV.z, 1.6)) * (0.8 + 0.2 * sin(uTime * 5.0 + vC.x * 9.0));
+        col += max(vEd, 0.0) * vec3(0.3, 1.7, 0.6) * (glint + 0.2);  // food
+        col += max(-vEd, 0.0) * vec3(1.9, 0.22, 0.1) * glint;        // bigger than you: danger
         if (air < 0.5) col = applyBeer(col, vC);
         float a = 1.0 - smoothstep(0.86, 1.0, r2);
         gl_FragColor = vec4(col, a);
@@ -213,7 +215,7 @@ export function createBubbles(mug, U, game) {
         vL = position;
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = clamp(0.022 * uPx * projectionMatrix[1][1] / max(-mv.z, 0.05), 1.0, 26.0);
+        gl_PointSize = clamp(0.014 * uPx * projectionMatrix[1][1] / max(-mv.z, 0.05), 1.0, 26.0);
       }`,
     fragmentShader: COMMON + BEER + /* glsl */`
       varying vec3 vL;
@@ -272,7 +274,7 @@ export function createBubbles(mug, U, game) {
     aRad.array[n] = P.visible && cameraOutsideGlass ? P.r * P.scale : 0;
     aPos.needsUpdate = true; aRad.needsUpdate = true;
     pu.uPPos.value.copy(P.pos); pu.uPRad.value = P.r * P.scale; pu.uVel.value.copy(P.vel);
-    pu.uWob.value = P.wob; pu.uFlash.value = P.invuln > 0 ? 1 : 0;
+    pu.uWob.value = P.wob; pu.uFlash.value = P.hurtT > 0 ? 1 : 0;
 
     for (let i = 0; i < game.MAXH; i++) {
       if (i < game.nHops) {
@@ -300,7 +302,7 @@ export function createBubbles(mug, U, game) {
     markerMat.uniforms.uAlpha.value = P.visible ? outside * 0.9 : 0;
     markerMat.uniforms.uPop.value = P.pop;
     markerMat.uniforms.uSize.value = P.pop > 0 ? 0.6 + P.pop * 2.2 : lerpN(P.r * P.scale * 3.4, Math.max(0.55, P.r * 3.2), outside);
-    markerMat.uniforms.uHalo.value = P.visible ? 0.16 * (1 - outside) : 0;
+    markerMat.uniforms.uHalo.value = P.visible ? (0.16 + (game.fizzT > 0 ? 0.7 : 0)) * (1 - outside) : 0;
   };
   out.player = player; out.marker = marker;
   return out;
