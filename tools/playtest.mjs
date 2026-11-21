@@ -35,6 +35,14 @@ const r1 = await G(() => { const g = window.__dbg.game; g.player.pos.set(1, 5, 1
 await page.waitForTimeout(600);
 check('bigger bubble does not get absorbed', Math.abs((await G(() => window.__dbg.game.player.r)) - r1) < 0.02);
 
+// the bubble rises by itself and dives while the dive key is held
+const y0 = await G(() => { const g = window.__dbg.game; g.player.pos.set(0, 5, 0); g.player.vel.set(0, 0, 0); return 5; });
+await until((y0) => window.__dbg.game.player.pos.y > y0 + 0.25, y0).then(() => check('bubble rises on its own', true), () => check('bubble rises on its own', false));
+await page.keyboard.down('ShiftLeft');
+const y1 = await G(() => window.__dbg.game.player.pos.y);
+await until((y1) => window.__dbg.game.player.pos.y < y1 - 0.25, y1).then(() => check('holding dive sinks the bubble', true), () => check('holding dive sinks the bubble', false));
+await page.keyboard.up('ShiftLeft');
+
 // hop shard shrinks
 const r2 = await G(() => { const g = window.__dbg.game; g.player.r = 0.2; g.player.invuln = 0; g.hops[0].pos.copy(g.player.pos); return g.player.r; });
 await until(() => window.__dbg.game.player.invuln > 0).then(async () => check('hop shard shrinks the bubble', (await G(() => window.__dbg.game.player.r)) < r2), () => check('hop shard shrinks the bubble', false));
@@ -55,7 +63,7 @@ check('game-over card', (await cardTitle()) === 'Megittak', await cardTitle());
 await page.click('button.go');
 await until(() => window.__dbg.game.state === 'play');
 check('restart resets score and level', await G(() => window.__dbg.game.score === 0 && window.__dbg.game.level > 11));
-check('level dropped during the sip', l0 > 11);
+check('sip lowered the level', (await G(() => window.__dbg.game.sip.done)) >= 0 && l0 > 11);
 
 // escape through the foam when big enough
 await G(() => { const g = window.__dbg.game; g.nHops = 0; g.player.r = g.gate + 0.02; g.player.pos.set(0, g.level - 0.1, 0); });

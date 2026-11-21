@@ -172,6 +172,7 @@ export async function createMug(U) {
     uFogDeep: { value: new THREE.Vector3(0.15, 0.042, 0.002) },
     uFogBright: { value: new THREE.Vector3(1.4, 0.8, 0.09) },
     uFogGain: { value: 1 },
+    uEdible: { value: 0 },                 // bubbles smaller than this can be absorbed
     uShade: { value: 0 },
     uLevelY: { value: L0 },
     uFoamH: { value: FOAM0 },

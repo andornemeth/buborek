@@ -68,7 +68,6 @@ async function boot() {
   const begin = (fn) => { sound.start(); fn(); rig.goInside(); cardUp = false; rig.pitchIn = 0.3; };
   hud.title(game.best, () => begin(() => {
     game.newRun();
-    setTimeout(() => game.state === 'play' && hud.toast('Nyeld el a nálad kisebb buborékokat, hogy megnőj!', 4.5), 2600);
   }));
   document.getElementById('btnSound').addEventListener('click', (e) => {
     sound.setMuted(!sound.muted); e.currentTarget.textContent = sound.muted ? 'Hang: ki' : 'Hang: be'; e.currentTarget.blur();
@@ -92,9 +91,10 @@ async function boot() {
       if (inp.zoom) { const z = rig.zoom(inp.zoom); if (z === 'in') rig.goInside(); if (z === 'out') rig.goOutside(); }
     } else if (inp.zoom) rig.zoom(inp.zoom);
     const ax = input.axes();
-    move.set(0, 0, 0).addScaledVector(rig.forward, ax.y).addScaledVector(rig.right, ax.x);
-    move.y += ax.v;
+    move.set(0, 0, 0).addScaledVector(rig.flat, ax.y).addScaledVector(rig.right, ax.x);
     if (move.lengthSq() > 1) move.normalize();
+    if (playing && move.lengthSq() > 0.02) game.moved = true;
+    move.y = clamp(ax.v, -1, 1);
     frameInput.dash = inp.dash && playing;
 
     // simulate; the outside view runs in slow motion
@@ -131,6 +131,7 @@ async function boot() {
     mug.group.position.set(0, env.tableTopY + game.lift * 5.0, -game.lift * 2.2);
     mug.mu.uSigma.value = game.sigma; mug.mu.uShade.value = game.shade;
     mug.mu.uFogGain.value = lerp(1.0, 1.75, rig.e);
+    mug.mu.uEdible.value = playing ? game.player.r * 0.93 : 0;
     env.update(dtReal);
     rig.shiftTo = cardUp && cssW / cssH > 1.35 ? 6.5 : 0;
     rig.update(dtReal, game, mug.group, cssW / cssH);

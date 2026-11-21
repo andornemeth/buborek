@@ -24,7 +24,7 @@ export class Game {
     this.sites = [];
     for (let i = 0; i < 16; i++) { const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * 3.6; this.sites.push([Math.cos(a) * r, YB + 0.03, Math.sin(a) * r]); }
     for (let i = 0; i < 7; i++) { const a = Math.random() * 6.283; this.sites.push([Math.cos(a) * 3.95, YB + 0.5 + Math.random() * 3.5, Math.sin(a) * 3.95]); }
-    this.score = 0; this.mug = 1; this.time = 0;
+    this.score = 0; this.mug = 1; this.time = 0; this.eaten = 0; this.moved = false;
     this.startMug(1);
   }
 
@@ -40,7 +40,7 @@ export class Game {
     this.flowGain = 1 + 0.15 * m;
     this.level = L0; this.foamH = FOAM0; this.laceTop = L0 + FOAM0;
     this.tilt = 0; this.lift = 0; this.shade = 0; this.drink = 0; this.haze = 0;
-    this.sip = { phase: 'wait', t: this.sipEvery + 6, done: 0, from: L0, to: L0, final: false, a0: 0 };
+    this.sip = { phase: 'wait', t: this.sipEvery + (n === 1 ? 24 : 6), done: 0, from: L0, to: L0, final: false, a0: 0 };
     this.warning = 0;
     this.combo = 0; this.comboT = 0;
     this.escapeT = 0; this.deadT = 0; this.deathCause = '';
@@ -64,7 +64,7 @@ export class Game {
     for (let i = 0; i < s.length; i += 3) { this.randomPoint(t, 0.05); s[i] = t.x; s[i + 1] = t.y; s[i + 2] = t.z; }
   }
 
-  newRun() { this.score = 0; this.time = 0; this.startMug(1); this.state = 'play'; }
+  newRun() { this.score = 0; this.time = 0; this.eaten = 0; this.moved = false; this.startMug(1); this.state = 'play'; }
   nextMug() { this.startMug(this.mug + 1); this.state = 'play'; }
 
   setSurface() {
@@ -223,10 +223,11 @@ export class Game {
     if (inCloud > 0.5) this.toast('Élesztőfelhő! Lehúz és lelassít.');
 
     const speed = 2.2 * (1 - 0.6 * inCloud);
-    const buoy = (0.3 + 1.25 * P.r) * (1 - 1.5 * inCloud);
-    const tx = input.move.x * speed + this.up.x * buoy + f.x * 0.75;
-    const ty = input.move.y * speed + this.up.y * buoy + f.y * 0.75;
-    const tz = input.move.z * speed + this.up.z * buoy + f.z * 0.75;
+    // The bubble always floats upward on its own; steering is sideways, diving fights the buoyancy.
+    const buoy = (0.6 + 1.3 * P.r) * (1 - 1.5 * inCloud);
+    const tx = input.move.x * speed + this.up.x * buoy + f.x * 0.4;
+    const ty = input.move.y * speed + this.up.y * buoy + f.y * 0.4;
+    const tz = input.move.z * speed + this.up.z * buoy + f.z * 0.4;
     const k = Math.min(1, dt * 4.5);
     P.vel.x += (tx - P.vel.x) * k; P.vel.y += (ty - P.vel.y) * k; P.vel.z += (tz - P.vel.z) * k;
 
@@ -245,7 +246,7 @@ export class Game {
     if (touched && this.drink < 0.3) {
       if (P.r >= this.gate) { this.beginEscape(); return; }
       P.vel.addScaledVector(this.up, -1.6); P.wob = Math.max(P.wob, 0.6);
-      this.toast('Még túl kicsi vagy a habhoz. Nyelj el több buborékot!');
+      this.toast('Még túl kicsi vagy a habhoz. Merülj le, és nyelj el több buborékot!');
       this.emit('bump', {});
     }
 
@@ -316,7 +317,7 @@ export class Game {
       if (d2 < rr * rr) {
         if (r < pr * 0.93) {
           P.r = Math.cbrt(P.r ** 3 + 1.5 * r ** 3);
-          this.combo = Math.min(8, this.combo + 1); this.comboT = 2.2;
+          this.combo = Math.min(8, this.combo + 1); this.comboT = 2.2; this.eaten++;
           const pts = Math.round((10 + 90 * (r / pr)) * this.combo);
           this.score += pts; P.wob = Math.max(P.wob, 0.45 + r / pr * 0.5);
           this.emit('absorb', { pts, ratio: r / pr });

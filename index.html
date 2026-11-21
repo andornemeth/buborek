@@ -14,7 +14,7 @@
   <div id="hud" hidden>
     <div class="top">
       <div class="score"><span id="score">0</span><small id="combo"></small></div>
-      <div class="mug"><span id="mugNo">1. korsó</span><div class="bar" title="Mennyi sör maradt"><i id="beerBar"></i></div></div>
+      <div class="mug"><span id="mugNo">1. korsó</span><div class="bar" title="Mennyi sör maradt"><i id="beerBar"></i></div><small>ennyi sör maradt</small></div>
       <div class="btns">
         <button id="btnView" aria-label="Nézet váltása">Kívülről</button>
         <button id="btnSound" aria-label="Hang ki/be">Hang: be</button>
@@ -25,10 +25,12 @@
       <div class="gauge"><i id="sizeBar"></i><b id="gateTick"></b></div>
       <span id="sizeHint">a habhoz kell</span>
     </div>
+    <div id="goal"></div>
     <div id="warn" hidden>KORTY JÖN!</div>
     <div id="danger" hidden>▲<span>SZÁJ</span></div>
     <div id="toast"></div>
     <div id="stick" hidden><i></i></div>
+    <button id="btnDive" hidden>Merülés<small>tartsd nyomva</small></button>
     <button id="btnDash" hidden>Lendület</button>
   </div>
 

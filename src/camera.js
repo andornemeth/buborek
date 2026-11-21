@@ -12,7 +12,7 @@ export class Rig {
     this.yaw = 0.35; this.pitchIn = 0.25; this.pitchOut = -0.15;
     this.view = 1; this.target = 1;           // 0 inside, 1 outside
     this.dist = 28; this.e = 1; this.shift = 0; this.shiftTo = 0;
-    this.forward = new THREE.Vector3(0, 0, -1); this.right = new THREE.Vector3(1, 0, 0);
+    this.forward = new THREE.Vector3(0, 0, -1); this.right = new THREE.Vector3(1, 0, 0); this.flat = new THREE.Vector3(0, 0, -1);
   }
   goInside() { this.target = 0; }
   goOutside() { this.target = 1; }
@@ -39,7 +39,7 @@ export class Rig {
     // Inside pose in mug-local space; pulled in so the camera never leaves the liquid.
     const cp = Math.cos(this.pitchIn), sp = Math.sin(this.pitchIn);
     fwd.set(sy * cp, sp, -cy * cp);
-    this.forward.copy(fwd); this.right.set(cy, 0, sy);
+    this.forward.copy(fwd); this.right.set(cy, 0, sy); this.flat.set(sy, 0, -cy);
     const want = 0.5 + 5.2 * P.r * P.scale;
     let d = want;
     for (let k = 0; k < 14; k++) {

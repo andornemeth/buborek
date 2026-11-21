@@ -21,17 +21,17 @@ export function createBubbles(mug, U, game) {
   const bubbleMat = new THREE.ShaderMaterial({
     uniforms: mu, alphaToCoverage: true,
     vertexShader: /* glsl */`
-      attribute vec3 aPos; attribute float aRad;
-      varying vec2 vUv; varying vec3 vC; varying vec3 vCw;
+      attribute vec3 aPos; attribute float aRad; uniform float uEdible;
+      varying vec2 vUv; varying vec3 vC; varying vec3 vCw; varying float vEd;
       void main() {
-        vUv = position.xy; vC = aPos;
+        vUv = position.xy; vC = aPos; vEd = step(aRad, uEdible);
         vec4 w = modelMatrix * vec4(aPos, 1.0); vCw = w.xyz;
         vec4 mv = viewMatrix * w;
         mv.xy += position.xy * aRad;
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: COMMON + BEER + /* glsl */`
-      varying vec2 vUv; varying vec3 vC; varying vec3 vCw;
+      varying vec2 vUv; varying vec3 vC; varying vec3 vCw; varying float vEd;
       void main() {
         float r2 = dot(vUv, vUv);
         if (r2 > 1.0) discard;
@@ -49,6 +49,8 @@ export function createBubbles(mug, U, game) {
         thru += uFogBright * 0.45 * pow(max(-N.y, 0.0), 2.5) * smoothstep(1.0, 0.3, r2) * (1.0 - air);
         vec3 col = mix(thru, refl, F);
         col *= 1.0 - 0.35 * smoothstep(0.9, 1.0, r2);
+        // food: bubbles small enough to absorb glint green
+        col += vEd * vec3(0.25, 1.35, 0.5) * (0.3 + 0.9 * pow(1.0 - nV.z, 1.6)) * (0.8 + 0.2 * sin(uTime * 5.0 + vC.x * 9.0));
         if (air < 0.5) col = applyBeer(col, vC);
         float a = 1.0 - smoothstep(0.86, 1.0, r2);
         gl_FragColor = vec4(col, a);

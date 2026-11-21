@@ -4,7 +4,7 @@ export class Input {
     this.keys = new Set();
     this.stick = { active: false, id: -1, ox: 0, oy: 0, x: 0, y: 0 };
     this.lookDX = 0; this.lookDY = 0; this.zoom = 0;
-    this.dash = false; this.toggle = false;
+    this.dash = false; this.toggle = false; this.diveHeld = false;
     this.look = new Map(); this.pinch = 0;
     this.touch = false;
 
@@ -68,7 +68,7 @@ export class Input {
     if (k.has('KeyW') || k.has('ArrowUp')) y += 1;
     if (k.has('KeyS') || k.has('ArrowDown')) y -= 1;
     if (k.has('KeyE')) v += 1;
-    if (k.has('KeyQ') || k.has('ShiftLeft')) v -= 1;
+    if (k.has('KeyQ') || k.has('ShiftLeft') || k.has('ShiftRight') || this.diveHeld) v -= 1;
     return { x, y, v };
   }
   consume() {
