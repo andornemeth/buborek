@@ -76,6 +76,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .card ul { list-style: none; padding: 0; margin: 12px 0 18px; display: grid; gap: 6px; font-size: 14px; text-align: left; }
 .card li { display: grid; grid-template-columns: 9.5em 1fr; gap: 10px; align-items: baseline; }
 .card li b { color: var(--gold); font-weight: 700; }
+.card img.friends { display: block; width: min(100%, 360px); margin: 0 auto 8px; border-radius: 14px; border: 2px solid rgba(255,217,120,.5); box-shadow: 0 8px 24px rgba(0,0,0,.5); }
 .card .venues { display: flex; gap: 10px; justify-content: center; margin: 4px 0 14px; }
 .card .venues button { flex: 1; max-width: 200px; padding: 9px 10px; border-radius: 14px; border: 2px solid rgba(255,243,214,.3); background: rgba(255,255,255,.06); font-weight: 700; font-size: 14px; }
 .card .venues button i { display: block; height: 34px; border-radius: 8px; margin-bottom: 6px; }

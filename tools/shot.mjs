@@ -57,6 +57,14 @@ if (steps.length === 0 || steps.some((s) => ['inside', 'outside', 'sip', 'wall',
     await phase('drink'); await viewIs(0); await frames(3); await snap('05-sip-inside');
   }
 }
+if (steps.includes('friends')) {
+  await page.evaluate(() => document.querySelector('button.go').click());
+  await viewIs(0);
+  await page.evaluate(() => { const { game, rig } = window.__dbg; game.player.invuln = 99; game.player.r = 0.09; game.player.pos.set(0, 8.5, -2.4); game.player.vel.set(0, 0, 0); rig.yaw = 0; rig.pitchIn = 0.12; });
+  await frames(3); await snap('10-friends-inside');
+  await page.evaluate(() => { const { game, rig } = window.__dbg; rig.yaw = 0.05; rig.pitchOut = -0.05; rig.goOutside(); });
+  await viewIs(1); await frames(3); await snap('11-friends-outside');
+}
 if (steps.includes('chain')) {
   await page.evaluate(() => document.querySelector('button.go').click());
   await viewIs(0);

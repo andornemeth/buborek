@@ -1,5 +1,6 @@
 // DOM overlay: score, gauges, warnings, story cards, touch controls.
 import { L0, YB, R_START, THEMES } from './params.js';
+import friendsCard from '../assets/friends-card.jpg';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => n.toLocaleString('hu-HU');
@@ -19,8 +20,8 @@ const DEATH = {
 };
 
 export class Hud {
-  constructor(input) {
-    this.input = input;
+  constructor(input, themeId) {
+    this.input = input; this.themeId = themeId;
     this.el = { hud: $('hud'), score: $('score'), combo: $('combo'), mugNo: $('mugNo'), beer: $('beerBar'), size: $('sizeBar'),
       gauge: $('sizeBar').parentElement, tick: $('gateTick'), warn: $('warn'), danger: $('danger'), toast: $('toast'),
       stick: $('stick'), knob: $('stick').firstElementChild, dash: $('btnDash'), dive: $('btnDive'), goal: $('goal'), view: $('btnView'), sound: $('btnSound'),
@@ -74,7 +75,9 @@ export class Hud {
   over(game, onGo) {
     const [h, t] = DEATH[game.deathCause] || DEATH.pop;
     const rec = game.score > 0 && game.score >= game.best;
+    const drunk = this.themeId === 'kocsma' && (game.deathCause === 'swallowed' || game.deathCause === 'empty');
     this.card(`
+      ${drunk ? `<img class="friends" src="${friendsCard}" alt="A Nagy Ivók a szomszéd asztalnál"><p class="dim">A Nagy Ivók köszönik. Egészségükre!</p>` : ''}
       <h1>${h}</h1><h2>${t}</h2>
       <div class="stats"><div><b>${fmt(game.score)}</b>pont</div><div><b>${fmt(game.best)}</b>rekord</div><div><b>${game.mug}.</b>korsó</div></div>
       ${rec ? '<p>Új rekord. Prost!</p>' : ''}

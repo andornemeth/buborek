@@ -27,7 +27,7 @@ async function boot() {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 500);
   const themeId = currentThemeId(), theme = THEMES[themeId];
-  const env = createEnvironment(renderer, scene, U, themeId);
+  const env = await createEnvironment(renderer, scene, U, themeId);
   const mug = await createMug(U, theme);
   mug.group.position.y = env.tableTopY;
   scene.add(mug.group);
@@ -38,7 +38,7 @@ async function boot() {
   const rig = new Rig(camera);
   const input = new Input(canvas);
   const sound = new Sound();
-  const hud = new Hud(input);
+  const hud = new Hud(input, themeId);
 
   // --- sizing with dynamic resolution ---
   const fixedScale = params.has('scale') ? Number(params.get('scale')) : 0;
@@ -71,7 +71,7 @@ async function boot() {
     try { localStorage.setItem('buborek-hely', id); } catch { /* ignore */ }
     const q = new URLSearchParams(location.search); q.set('hely', id); location.search = q.toString();
   });
-  if (themeId === 'kocsma') rig.pitchOut = -0.1;
+  if (themeId === 'kocsma') rig.pitchOut = -0.07;
   document.getElementById('btnSound').addEventListener('click', (e) => {
     sound.setMuted(!sound.muted); e.currentTarget.textContent = sound.muted ? 'Hang: ki' : 'Hang: be'; e.currentTarget.blur();
   });

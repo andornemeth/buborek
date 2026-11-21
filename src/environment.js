@@ -1,6 +1,10 @@
 // Procedural Christmas-market surroundings: HDR panorama, wooden table, coaster, contact shadow.
 import * as THREE from 'three';
 import { COMMON } from './shaders/common.js';
+import friendsUrl from '../assets/friends.jpg';
+
+// Where the friends' table sits in the pub: a photo panel behind the mug (world units).
+const FRIENDS = { x: 2, z: -80, w: 120, bottom: -20 };
 
 function rng(seed) {
   let s = seed >>> 0;
@@ -15,7 +19,7 @@ function rng(seed) {
 const BAND = [-12, 33];
 
 // Equirectangular painting of the surroundings: u = azimuth, top = zenith. Direction -Z is at u = 0.25.
-function paintPanorama(kind) {
+function paintPanorama(kind, photo) {
   const W = 2048, H = 1024, rnd = rng(7);
   const yOf = (elevDeg) => H / 2 - (elevDeg / 90) * (H / 2);
 
@@ -72,7 +76,21 @@ function paintPanorama(kind) {
   c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
   c.drawImage(small, 0, 0, W, H);
 
-  return { scenery: cv, lights: lc, band: bc };
+  // The friends also appear in the map used for reflections and for the view out through the beer,
+  // but not on the sky dome itself, where the photo panel stands in front of it.
+  let envScenery = cv;
+  if (photo) {
+    envScenery = document.createElement('canvas'); envScenery.width = W; envScenery.height = H;
+    const e = envScenery.getContext('2d');
+    e.drawImage(cv, 0, 0);
+    const d = Math.hypot(FRIENDS.x, FRIENDS.z), hgt = FRIENDS.w * photo.height / photo.width, deg = 180 / Math.PI;
+    const half = Math.atan(FRIENDS.w / 2 / d) / (2 * Math.PI);
+    const uc = Math.atan2(FRIENDS.z, FRIENDS.x) / (2 * Math.PI) + 0.5;
+    const yTop = yOf(Math.atan((FRIENDS.bottom + hgt - 7) / d) * deg), yBot = yOf(Math.atan((FRIENDS.bottom - 7) / d) * deg);
+    e.globalAlpha = 0.9;
+    e.drawImage(photo, (uc - half) * W, yTop, half * 2 * W, yBot - yTop);
+  }
+  return { scenery: cv, envScenery, lights: lc, band: bc };
 }
 
 // The Christmas market at blue hour.
@@ -318,12 +336,14 @@ function paintCoaster() {
   return cv;
 }
 
-export function createEnvironment(renderer, scene, U, themeId) {
+export async function createEnvironment(renderer, scene, U, themeId) {
   const pub = themeId === 'kocsma';
+  const photo = pub ? await new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = friendsUrl; }) : null;
   // HDR panorama: the painted lights are pushed well above 1.0 so they bloom and reflect brightly.
-  const painted = paintPanorama(themeId);
+  const painted = paintPanorama(themeId, photo);
   const pano = new THREE.CanvasTexture(painted.scenery), lights = new THREE.CanvasTexture(painted.lights);
-  pano.colorSpace = lights.colorSpace = THREE.NoColorSpace;
+  const envTex = painted.envScenery === painted.scenery ? pano : new THREE.CanvasTexture(painted.envScenery);
+  pano.colorSpace = lights.colorSpace = envTex.colorSpace = THREE.NoColorSpace;
   const envRT = new THREE.WebGLRenderTarget(2048, 1024, {
     type: THREE.HalfFloatType, depthBuffer: false,
     minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: true,
@@ -333,7 +353,7 @@ export function createEnvironment(renderer, scene, U, themeId) {
   const bake = new THREE.Mesh(
     new THREE.PlaneGeometry(2, 2),
     new THREE.ShaderMaterial({
-      uniforms: { tMap: { value: pano }, tLights: { value: lights } },
+      uniforms: { tMap: { value: envTex }, tLights: { value: lights } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
       fragmentShader: /* glsl */`
         uniform sampler2D tMap, tLights; varying vec2 vUv;
@@ -349,7 +369,7 @@ export function createEnvironment(renderer, scene, U, themeId) {
   renderer.setRenderTarget(envRT);
   renderer.render(bakeScene, new THREE.Camera());
   renderer.setRenderTarget(null);
-  lights.dispose();
+  lights.dispose(); if (envTex !== pano) envTex.dispose();
   const band = new THREE.CanvasTexture(painted.band);
   band.colorSpace = THREE.NoColorSpace; band.wrapS = THREE.RepeatWrapping; band.generateMipmaps = false; band.minFilter = THREE.LinearFilter;
   pano.wrapS = THREE.RepeatWrapping; pano.generateMipmaps = false; pano.minFilter = THREE.LinearFilter;
@@ -431,6 +451,24 @@ export function createEnvironment(renderer, scene, U, themeId) {
     const glowL = new THREE.PointLight(0xff9a3c, 260, 70, 2); glowL.position.y = 4;
     tea.add(holder, wax, flame, glowL); scene.add(tea);
     spin.push((dt, t) => { const f = 0.85 + 0.15 * Math.sin(t * 11) * Math.sin(t * 7.3); flame.scale.set(1, 1.9 * f, 1); glowL.intensity = 260 * f; });
+    // The friends at the next table: their photo on a soft-edged panel behind the mug.
+    if (photo) {
+      const pt = new THREE.Texture(photo); pt.colorSpace = THREE.NoColorSpace; pt.anisotropy = 4; pt.needsUpdate = true;
+      const hgt = FRIENDS.w * photo.height / photo.width;
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(FRIENDS.w, hgt), new THREE.ShaderMaterial({
+        uniforms: { tMap: { value: pt } }, transparent: true, depthWrite: false,
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: /* glsl */`
+          uniform sampler2D tMap; varying vec2 vUv;
+          void main() {
+            vec3 c = pow(texture2D(tMap, vUv).rgb, vec3(2.2)) * 0.82;
+            float a = smoothstep(0.0, 0.1, vUv.x) * smoothstep(1.0, 0.9, vUv.x) * smoothstep(1.0, 0.86, vUv.y) * smoothstep(0.0, 0.05, vUv.y);
+            gl_FragColor = vec4(c, a);
+          }`,
+      }));
+      panel.position.set(FRIENDS.x, FRIENDS.bottom + hgt / 2, FRIENDS.z); panel.renderOrder = -5;
+      scene.add(panel);
+    }
     // ceiling fan
     const fan = new THREE.Group(); fan.position.set(10, 50, -60);
     const dark = new THREE.MeshStandardMaterial({ color: 0x241710, roughness: 0.6 });
