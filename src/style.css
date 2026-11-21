@@ -81,7 +81,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .card .venues button { flex: 1; max-width: 200px; padding: 9px 10px; border-radius: 14px; border: 2px solid rgba(255,243,214,.3); background: rgba(255,255,255,.06); font-weight: 700; font-size: 14px; }
 .card .venues button i { display: block; height: 34px; border-radius: 8px; margin-bottom: 6px; }
 .card .venues button.vasar i { background: radial-gradient(circle at 70% 60%, #ffcf6a 0 9%, transparent 10%), radial-gradient(circle at 30% 40%, #ffb84a 0 7%, transparent 8%), radial-gradient(circle at 52% 70%, #ffd98a 0 6%, transparent 7%), linear-gradient(180deg, #0a1e66, #2a55b8 70%, #e8b85a 71%); }
-.card .venues button.kocsma i { background: radial-gradient(circle at 50% 62%, #ffb648 0 10%, rgba(255,160,60,.35) 11% 26%, transparent 27%), repeating-linear-gradient(90deg, #d8cfbc 0 22%, #2a1a10 22% 26%), #d8cfbc; }
+.card .venues button.kocsma i { background: #1d5a2c url('../assets/pub-sign.jpg') center / cover; }
 .card .venues button.sel { border-color: var(--gold); background: rgba(255,217,120,.16); }
 .card button.go { font-family: var(--display); font-weight: 700; font-size: 26px; padding: 10px 34px 12px; border-radius: 999px; border: 0; background: linear-gradient(180deg, #ffd978, #e59a14); color: #2a1703; box-shadow: 0 6px 0 #7a4706, 0 12px 24px rgba(0,0,0,.4); }
 .card button.go:active { transform: translateY(4px); box-shadow: 0 2px 0 #7a4706; }

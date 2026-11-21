@@ -1,6 +1,7 @@
 // DOM overlay: score, gauges, warnings, story cards, touch controls.
 import { L0, YB, R_START, THEMES } from './params.js';
 import friendsCard from '../assets/friends-card.jpg';
+import pubFront from '../assets/pub-front.jpg';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => n.toLocaleString('hu-HU');
@@ -65,9 +66,11 @@ export class Hud {
     for (const b of this.el.inner.querySelectorAll('[data-venue]')) b.addEventListener('click', () => { if (b.dataset.venue !== themeId) onVenue(b.dataset.venue); });
   }
   escaped(game, bonus, onGo) {
+    const pub = this.themeId === 'kocsma';
     this.card(`
+      ${pub ? `<img class="friends" src="${pubFront}" alt="A kocsma bejárata este">` : ''}
       <h1>Szabad vagy!</h1><h2>Áttörted a habkoronát</h2>
-      <p>Felszálltál a vásár fényei közé. A pultnál viszont már csapolják a következőt…</p>
+      <p>${pub ? 'Kilibbentél az ajtón az éjszakába. Odakint már vár valaki, odabent pedig csapolják a következőt…' : 'Felszálltál a vásár fényei közé. A pultnál viszont már csapolják a következőt…'}</p>
       <div class="stats"><div><b>${fmt(game.score)}</b>pont</div><div><b>+${fmt(bonus)}</b>szabadulás</div><div><b>${game.mug}.</b>korsó</div></div>
       <p class="dim">${STORY[Math.min(game.mug, STORY.length - 1)]}</p>
       <button class="go">Noch eins!</button>`, onGo);

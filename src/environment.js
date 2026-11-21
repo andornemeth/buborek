@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { COMMON } from './shaders/common.js';
 import friendsUrl from '../assets/friends.jpg';
+import pubFrontUrl from '../assets/pub-front.jpg';
 
 // Where the friends' table sits in the pub: a photo panel behind the mug (world units).
 const FRIENDS = { x: 2, z: -80, w: 120, bottom: -20 };
@@ -468,6 +469,17 @@ export async function createEnvironment(renderer, scene, U, themeId) {
       }));
       panel.position.set(FRIENDS.x, FRIENDS.bottom + hgt / 2, FRIENDS.z); panel.renderOrder = -5;
       scene.add(panel);
+    }
+    // A framed photo of the pub's front hangs on the wall to the left.
+    {
+      const ft = new THREE.TextureLoader().load(pubFrontUrl); ft.colorSpace = THREE.SRGBColorSpace; ft.anisotropy = 4;
+      const pic = new THREE.Group();
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(47, 36.5, 1.6), new THREE.MeshStandardMaterial({ color: 0x2a1a0e, roughness: 0.5 }));
+      const img = new THREE.Mesh(new THREE.PlaneGeometry(42, 31.5), new THREE.MeshBasicMaterial({ map: ft, color: new THREE.Color(1.5, 1.45, 1.35) }));
+      img.position.z = 0.85;
+      pic.add(frame, img);
+      pic.position.set(-98, 30, -62); pic.rotation.y = 0.75;
+      scene.add(pic);
     }
     // ceiling fan
     const fan = new THREE.Group(); fan.position.set(10, 50, -60);
