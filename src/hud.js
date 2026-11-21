@@ -1,0 +1,119 @@
+// DOM overlay: score, gauges, warnings, story cards, touch controls.
+import { L0, YB } from './params.js';
+
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => n.toLocaleString('hu-HU');
+
+const STORY = [
+  '',
+  'A második korsó zavarosabb, és a Nagy Ivó is belejött.',
+  'Harmadik kör. Odalent már alig látni az élesztőtől.',
+  'A negyedik korsónál a komló is megsűrűsödik. Tartsd nyitva a szemed.',
+  'Az ötödik. A vásár már zár, de a Nagy Ivó még nem.',
+];
+const DEATH = {
+  pop: ['Kipukkadtál', 'Egy komlószilánk túl éles volt hozzád.'],
+  swallowed: ['Megittak', 'A Nagy Ivó egyetlen korttyal elnyelt. Egészségére.'],
+  empty: ['Elfogyott a sör', 'Az utolsó korttyal te is lecsúsztál. Nem nőttél elég nagyra időben.'],
+};
+
+export class Hud {
+  constructor(input) {
+    this.input = input;
+    this.el = { hud: $('hud'), score: $('score'), combo: $('combo'), mugNo: $('mugNo'), beer: $('beerBar'), size: $('sizeBar'),
+      gauge: $('sizeBar').parentElement, tick: $('gateTick'), warn: $('warn'), danger: $('danger'), toast: $('toast'),
+      stick: $('stick'), knob: $('stick').firstElementChild, dash: $('btnDash'), view: $('btnView'), sound: $('btnSound'),
+      card: $('card'), inner: $('cardInner') };
+    this.toastT = 0; this.shown = {};
+    this.el.dash.addEventListener('pointerdown', (e) => { e.preventDefault(); input.dash = true; });
+    this.el.view.addEventListener('click', () => { input.toggle = true; this.el.view.blur(); });
+  }
+
+  card(html, onGo) {
+    this.el.inner.innerHTML = html;
+    this.el.card.classList.remove('off');
+    const b = this.el.inner.querySelector('button.go');
+    if (b) { b.addEventListener('click', () => { this.el.card.classList.add('off'); onGo(); }, { once: true }); b.focus({ preventScroll: true }); }
+  }
+  title(best, onGo) {
+    const touch = matchMedia('(pointer: coarse)').matches;
+    this.card(`
+      <h1>Buborék</h1><h2>Út a habkoronáig</h2>
+      <p>Egy karcolásból születtél a korsó alján. A buborékok legendája szerint aki elég nagyra nő, áttöri a habkoronát, és szabad levegőként száll fel a vásár fényei fölé.</p>
+      <p>Csakhogy a sör tengere fogy: <b>a Nagy Ivó szomjas.</b></p>
+      <ul>${touch ? `
+        <li><b>Bal hüvelykujj</b><span>úszás arra, amerre nézel</span></li>
+        <li><b>Húzás jobb oldalt</b><span>körbenézés</span></li>
+        <li><b>Lendület gomb</b><span>gyors kitörés</span></li>
+        <li><b>Kívülről gomb</b><span>a korsó körbeforgatása, lassított idővel</span></li>` : `
+        <li><b>W A S D</b><span>úszás arra, amerre nézel (Q/E: le/fel)</span></li>
+        <li><b>Egérhúzás</b><span>körbenézés</span></li>
+        <li><b>Szóköz</b><span>lendület, gyors kitörés</span></li>
+        <li><b>Tab vagy görgő</b><span>a korsó kívülről, lassított idővel</span></li>`}
+      </ul>
+      <p class="dim">Nyeld el a nálad kisebb buborékokat. Kerüld a komlószilánkot és az élesztőfelhőt. Ha jön a korty, menekülj a szájtól.</p>
+      ${best ? `<p class="dim">Rekordod: <b>${fmt(best)}</b></p>` : ''}
+      <button class="go">Felszállás</button>`, onGo);
+  }
+  escaped(game, bonus, onGo) {
+    this.card(`
+      <h1>Szabad vagy!</h1><h2>Áttörted a habkoronát</h2>
+      <p>Felszálltál a vásár fényei közé. A pultnál viszont már csapolják a következőt…</p>
+      <div class="stats"><div><b>${fmt(game.score)}</b>pont</div><div><b>+${fmt(bonus)}</b>szabadulás</div><div><b>${game.mug}.</b>korsó</div></div>
+      <p class="dim">${STORY[Math.min(game.mug, STORY.length - 1)]}</p>
+      <button class="go">Noch eins!</button>`, onGo);
+  }
+  over(game, onGo) {
+    const [h, t] = DEATH[game.deathCause] || DEATH.pop;
+    const rec = game.score > 0 && game.score >= game.best;
+    this.card(`
+      <h1>${h}</h1><h2>${t}</h2>
+      <div class="stats"><div><b>${fmt(game.score)}</b>pont</div><div><b>${fmt(game.best)}</b>rekord</div><div><b>${game.mug}.</b>korsó</div></div>
+      ${rec ? '<p>Új rekord. Prost!</p>' : ''}
+      <button class="go">Újra</button>`, onGo);
+  }
+
+  toast(html, secs = 2.6) { this.el.toast.innerHTML = html; this.el.toast.classList.add('on'); this.toastT = secs; }
+
+  update(dt, game, rig, playing, mouthScreen) {
+    const e = this.el;
+    e.hud.hidden = !playing;
+    if (!playing) return;
+    const set = (k, v, f) => { if (this.shown[k] !== v) { this.shown[k] = v; f(v); } };
+    set('score', game.score, (v) => { e.score.textContent = fmt(v); });
+    set('combo', game.combo, (v) => { e.combo.textContent = v > 1 ? `×${v} sorozat` : ''; });
+    set('mug', game.mug, (v) => { e.mugNo.textContent = `${v}. korsó`; });
+    e.beer.style.transform = `scaleX(${Math.max(0, (game.level - YB) / (L0 - YB)).toFixed(3)})`;
+    const max = game.gate * 1.25, P = game.player;
+    e.size.style.transform = `scaleY(${Math.min(1, P.r / max).toFixed(3)})`;
+    set('gate', game.gate, () => { e.tick.style.bottom = `${(game.gate / max) * 100}%`; });
+    set('ready', P.r >= game.gate, (v) => { e.gauge.classList.toggle('ready', v); $('sizeHint').textContent = v ? 'irány a hab!' : 'a habhoz kell'; });
+    set('warn', game.warning > 0 && game.state === 'play', (v) => { e.warn.hidden = !v; });
+    set('final', game.sip.done >= game.nSips, (v) => { e.warn.textContent = v ? 'UTOLSÓ KORTY!' : 'KORTY JÖN!'; });
+    set('view', rig.target > 0.5, (v) => { e.view.textContent = v ? 'Belülről' : 'Kívülről'; });
+    set('dashcd', P.dashCd > 0, (v) => { e.dash.classList.toggle('cd', v); });
+
+    // arrow that points at the drinker's mouth while a sip threatens
+    const showD = game.warning > 0 && game.state === 'play' && mouthScreen;
+    set('danger', !!showD, (v) => { e.danger.hidden = !v; });
+    if (showD) {
+      const w = innerWidth, h = innerHeight, m = 46;
+      let { x, y, behind } = mouthScreen;
+      let dx = x - w / 2, dy = y - h / 2;
+      if (behind) { dx = -dx; dy = -dy; }
+      const off = behind || x < m || x > w - m || y < m || y > h - m;
+      if (off) { const s = Math.min((w / 2 - m) / Math.abs(dx || 1), (h / 2 - m) / Math.abs(dy || 1)); x = w / 2 + dx * s; y = h / 2 + dy * s; }
+      const ang = off ? Math.atan2(dy, dx) + Math.PI / 2 : 0;
+      e.danger.style.transform = `translate(${x - 20}px, ${y - 20}px) rotate(${ang}rad)`;
+    }
+
+    const st = this.input.stick;
+    set('touch', this.input.touch, (v) => { e.dash.hidden = !v; });
+    set('stick', st.active, (v) => { e.stick.hidden = !v; });
+    if (st.active) {
+      e.stick.style.left = `${st.ox}px`; e.stick.style.top = `${st.oy}px`;
+      e.knob.style.transform = `translate(${st.x * 40}px, ${st.y * 40}px)`;
+    }
+    if (this.toastT > 0) { this.toastT -= dt; if (this.toastT <= 0) e.toast.classList.remove('on'); }
+  }
+}

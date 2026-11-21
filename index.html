@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1a1009">
+  <title>Buborék – Út a habkoronáig</title>
+  <meta name="description" content="3D arcade játék: buborék vagy egy korsó sörben. Nőj nagyra, és törd át a habkoronát, mielőtt megisznak.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23f2b42a' stroke='%23fff3cf' stroke-width='3'/%3E%3Ccircle cx='11' cy='11' r='3.5' fill='%23fff8e0'/%3E%3C/svg%3E">
+</head>
+<body>
+  <canvas id="gl"></canvas>
+
+  <div id="hud" hidden>
+    <div class="top">
+      <div class="score"><span id="score">0</span><small id="combo"></small></div>
+      <div class="mug"><span id="mugNo">1. korsó</span><div class="bar" title="Mennyi sör maradt"><i id="beerBar"></i></div></div>
+      <div class="btns">
+        <button id="btnView" aria-label="Nézet váltása">Kívülről</button>
+        <button id="btnSound" aria-label="Hang ki/be">Hang: be</button>
+      </div>
+    </div>
+    <div class="size">
+      <label>Méret</label>
+      <div class="gauge"><i id="sizeBar"></i><b id="gateTick"></b></div>
+      <span id="sizeHint">a habhoz kell</span>
+    </div>
+    <div id="warn" hidden>KORTY JÖN!</div>
+    <div id="danger" hidden>▲<span>SZÁJ</span></div>
+    <div id="toast"></div>
+    <div id="stick" hidden><i></i></div>
+    <button id="btnDash" hidden>Lendület</button>
+  </div>
+
+  <div id="card" class="card">
+    <div class="inner" id="cardInner">
+      <p class="load">Csapolás…</p>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
